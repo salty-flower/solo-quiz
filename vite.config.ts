@@ -36,10 +36,12 @@ function katexShim(): Plugin {
   };
 }
 
-const inputHtml = buildTarget === "cdn" ? "index.cdn.html" : "index.standalone.html";
+const inputHtml =
+  buildTarget === "cdn" ? "index.cdn.html" : "index.standalone.html";
 const outputName = buildTarget === "cdn" ? "cdn.html" : "standalone.html";
 
 export default defineConfig({
+  base: isCdn ? "./" : "/",
   plugins: [
     svelte(),
     !isCdn && viteSingleFile(),
