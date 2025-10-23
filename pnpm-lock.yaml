@@ -15,7 +15,7 @@ importers:
         specifier: ^8.0.1
         version: 8.0.3
       katex:
-        specifier: ^0.16.11
+        specifier: ^0.16.25
         version: 0.16.25
       shadcn-svelte:
         specifier: ^1.0.9

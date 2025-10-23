@@ -1,5 +1,10 @@
 import { mount } from "svelte";
 import "./app.postcss";
+
+if (__BUILD_TARGET__ !== "cdn") {
+  await import("katex/dist/katex.min.css");
+}
+
 import App from "./App.svelte";
 
 const target = document.getElementById("app");
