@@ -1,47 +1,44 @@
-# Svelte + TS + Vite
+# Solo Quiz Player
 
-This template should help get you started developing with Svelte and TypeScript in Vite.
+A local-first quiz runner built with Svelte, TailwindCSS, and shadcn-svelte components. Import JSON assessments, take them entirely offline, review answers with detailed scoring, and export attempt data as CSV.
 
-## Recommended IDE Setup
+## Features
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+- ✅ Works under `file://` with an all-in-one `standalone.html`
+- ✅ Lightweight `cdn.html` build that pulls KaTeX from jsDelivr when online
+- ✅ Drag-and-drop or file picker JSON import with zod validation and friendly error reporting
+- ✅ Supports single, multi, fill-in-the-blank, numeric, and ordering questions with per-question weighting and feedback
+- ✅ Review dialog with scoring summary, KaTeX rendering, and CSV export
+- ✅ IndexedDB powered recent file list with in-memory fallback
+- ✅ Dark/light theme toggle and fully keyboard accessible controls
 
-## Need an official Svelte framework?
+Download the bundled HTML from `dist/standalone.html` to run completely offline. When hosted (for example via GitHub Pages), both `cdn.html` and `standalone.html` are published so you can choose between fast-first-load or offline usage.
 
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
+## Getting started
 
-## Technical considerations
-
-**Why use this over SvelteKit?**
-
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
-
-This template contains as little as possible to get started with Vite + TypeScript + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
-
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
-
-**Why `global.d.ts` instead of `compilerOptions.types` inside `jsconfig.json` or `tsconfig.json`?**
-
-Setting `compilerOptions.types` shuts out all other types not explicitly listed in the configuration. Using triple-slash references keeps the default TypeScript setting of accepting type information from the entire workspace, while also adding `svelte` and `vite/client` type information.
-
-**Why include `.vscode/extensions.json`?**
-
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
-
-**Why enable `allowJs` in the TS template?**
-
-While `allowJs: false` would indeed prevent the use of `.js` files in the project, it does not prevent the use of JavaScript syntax in `.svelte` files. In addition, it would force `checkJs: false`, bringing the worst of both worlds: not being able to guarantee the entire codebase is TypeScript, and also having worse typechecking for the existing JavaScript. In addition, there are valid use cases in which a mixed codebase may be relevant.
-
-**Why is HMR not preserving my local component state?**
-
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/rixo/svelte-hmr#svelte-hmr).
-
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
-
-```ts
-// store.ts
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
+```bash
+pnpm install
+pnpm dev      # local development server
+pnpm build    # produce dist/standalone.html and dist/cdn.html
+pnpm check    # biome lint + tsc --noEmit + svelte-check
 ```
+
+The sample assessment at [`examples/sample-assessment.json`](examples/sample-assessment.json) exercises every question type and can be used while developing.
+
+## Manual QA checklist
+
+1. `pnpm build` – ensure both HTML outputs are created.
+2. Open `dist/standalone.html` directly from disk with Wi-Fi disabled. Load `examples/sample-assessment.json`, complete the quiz, verify scoring, review dialog, and CSV export.
+3. Retake and confirm answer reset works as expected.
+4. Re-open `dist/cdn.html` with the network on. Confirm KaTeX assets load from jsDelivr and questions render properly.
+5. Trigger timer expiry by lowering `timeLimitSec` in a test assessment and observing auto-submit.
+6. Verify drag-and-drop plus file picker both import assessments.
+7. Inspect IndexedDB (or memory fallback) for recent file metadata persistence.
+
+## Deployment
+
+GitHub Actions (`.github/workflows/gh-pages.yml`) builds both targets and publishes `dist/` to GitHub Pages. The published site exposes `cdn.html` (fast online) and `standalone.html` (download for offline use).
+
+## License
+
+[MIT](LICENSE)
