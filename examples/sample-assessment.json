@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "1.0",
+  "meta": {
+    "title": "Sample STEM Quiz",
+    "description": "Demonstrates every supported question type including math rendering.",
+    "shuffleQuestions": true,
+    "timeLimitSec": 600
+  },
+  "questions": [
+    {
+      "id": "q1",
+      "type": "single",
+      "text": "What is the derivative of $x^2$?",
+      "options": [
+        { "id": "a", "label": "$2x$", "explanation": "d/dx of $x^n$ is $nx^{n-1}$." },
+        { "id": "b", "label": "$x$" },
+        { "id": "c", "label": "$x^3$" }
+      ],
+      "correct": "a",
+      "weight": 2,
+      "feedback": {
+        "correct": "Great! The power rule applies here.",
+        "incorrect": "Remember the power rule: multiply by the exponent and subtract one."
+      },
+      "tags": ["calculus"]
+    },
+    {
+      "id": "q2",
+      "type": "multi",
+      "text": "Select all prime numbers.",
+      "options": [
+        { "id": "a", "label": "2" },
+        { "id": "b", "label": "4" },
+        { "id": "c", "label": "5" },
+        { "id": "d", "label": "9" }
+      ],
+      "correct": ["a", "c"],
+      "tags": ["number theory"],
+      "weight": 1,
+      "feedback": {
+        "correct": "2 and 5 are prime numbers.",
+        "incorrect": "Only numbers divisible by 1 and themselves are prime."
+      }
+    },
+    {
+      "id": "q3",
+      "type": "fitb",
+      "text": "Fill in the blank: The chemical symbol for water is _____.",
+      "accept": ["H2O", { "pattern": "^h\\s*2\\s*o$", "flags": "i" }],
+      "normalize": "lower",
+      "tags": ["chemistry"],
+      "feedback": {
+        "correct": "Correct!",
+        "incorrect": "Water is H₂O."
+      }
+    },
+    {
+      "id": "q4",
+      "type": "numeric",
+      "text": "How many degrees are there in $\\pi$ radians?",
+      "correct": 180,
+      "tolerance": 0,
+      "weight": 1.5,
+      "tags": ["trigonometry"]
+    },
+    {
+      "id": "q5",
+      "type": "ordering",
+      "text": "Arrange the planets from the Sun outward (using the first four planets).",
+      "items": ["Earth", "Mercury", "Mars", "Venus"],
+      "correctOrder": ["Mercury", "Venus", "Earth", "Mars"],
+      "weight": 1,
+      "tags": ["astronomy"]
+    }
+  ]
+}
