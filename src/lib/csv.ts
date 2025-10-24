@@ -1,8 +1,9 @@
 export interface CsvSummary {
   assessmentTitle: string;
-  totalScore: number;
-  maxScore: number;
-  percentage: number;
+  autoScore: number;
+  autoMaxScore: number;
+  autoPercentage: number;
+  subjectiveMaxScore: number;
   startedAt: Date;
   completedAt: Date;
   timeElapsedSec: number;
@@ -17,7 +18,11 @@ export interface CsvQuestionResult {
   tags: string[];
   userAnswer: string;
   correctAnswer: string;
-  isCorrect: boolean;
+  gradingMode: "auto" | "subjective";
+  isCorrect: boolean | null;
+  earned: number;
+  evaluationStatus?: string;
+  evaluationNotes?: string;
 }
 
 function escapeCsv(value: string): string {
@@ -37,7 +42,11 @@ export function buildCsv(
     "Question",
     "Your Answer",
     "Correct Answer",
+    "Grading Mode",
     "Correct?",
+    "Awarded Score",
+    "Evaluation Status",
+    "Evaluation Notes",
   ];
 
   const lines = [header.map(escapeCsv).join(",")];
@@ -52,7 +61,11 @@ export function buildCsv(
         row.questionText,
         row.userAnswer,
         row.correctAnswer,
-        row.isCorrect ? "true" : "false",
+        row.gradingMode,
+        row.isCorrect === null ? "pending" : row.isCorrect ? "true" : "false",
+        row.earned.toString(),
+        row.evaluationStatus ?? "",
+        row.evaluationNotes ?? "",
       ]
         .map(escapeCsv)
         .join(","),
@@ -64,14 +77,17 @@ export function buildCsv(
     [
       "Summary",
       summary.assessmentTitle,
-      "Score",
-      `${summary.totalScore} / ${summary.maxScore}`,
-      "Percentage",
-      `${summary.percentage.toFixed(2)}%`,
+      "Auto Score",
+      `${summary.autoScore} / ${summary.autoMaxScore}`,
+      "Auto Percentage",
+      `${summary.autoPercentage.toFixed(2)}%`,
+      "Subjective Max Score",
+      summary.subjectiveMaxScore.toString(),
       "Time Elapsed (s)",
       summary.timeElapsedSec.toString(),
       "Completed",
       summary.completedAt.toISOString(),
+      "",
     ]
       .map(escapeCsv)
       .join(","),

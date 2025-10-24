@@ -56,6 +56,18 @@ const fitbQuestion = baseQuestion.extend({
   normalize: normalizeModes.optional(),
 });
 
+const subjectiveRubricSchema = z.object({
+  rubric: z.string().min(1, "Provide grading guidance for the LLM"),
+  referenceAnswer: z.string().optional(),
+  additionalContext: z.string().optional(),
+  evaluatorModel: z.string().optional(),
+});
+
+const subjectiveQuestion = baseQuestion.extend({
+  type: z.literal("subjective"),
+  llmGrading: subjectiveRubricSchema,
+});
+
 const numericQuestion = baseQuestion.extend({
   type: z.literal("numeric"),
   correct: z.number(),
@@ -74,6 +86,7 @@ export const questionSchema = z.discriminatedUnion("type", [
   fitbQuestion,
   numericQuestion,
   orderingQuestion,
+  subjectiveQuestion,
 ]);
 
 export type Question = z.infer<typeof questionSchema>;
@@ -83,7 +96,23 @@ export type MultiQuestion = z.infer<typeof multiQuestion>;
 export type FitbQuestion = z.infer<typeof fitbQuestion>;
 export type NumericQuestion = z.infer<typeof numericQuestion>;
 export type OrderingQuestion = z.infer<typeof orderingQuestion>;
+export type SubjectiveQuestion = z.infer<typeof subjectiveQuestion>;
 export type QuestionOption = Option;
+
+export const llmSubjectiveResultSchema = z.object({
+  questionId: z.string().min(1, "Question id is required"),
+  status: z.enum(["pending", "scored", "error"]).default("pending"),
+  maxScore: z.number().min(0),
+  awardedScore: z.number().min(0).optional(),
+  reasoning: z.string().optional(),
+  rubric: z.string().optional(),
+  referenceAnswer: z.string().optional(),
+  evaluatorModel: z.string().optional(),
+  rawResponse: z.unknown().optional(),
+  evaluatedAt: z.string().datetime().optional(),
+});
+
+export type LlmSubjectiveResult = z.infer<typeof llmSubjectiveResultSchema>;
 
 const metaSchema = z.object({
   title: z.string().min(1, "Assessment title is required"),
