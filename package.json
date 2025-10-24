@@ -9,8 +9,8 @@
     "build:cdn": "cross-env BUILD_TARGET=cdn vite build --config vite.config.ts",
     "build": "pnpm run build:standalone && pnpm run build:cdn",
     "preview": "vite preview",
-    "format": "biome format .",
-    "lint": "biome lint .",
+    "format": "biome format . --write",
+    "lint": "biome lint . --write",
     "typecheck": "tsc --noEmit",
     "svelte-check": "svelte-check --tsconfig ./tsconfig.app.json",
     "check": "pnpm run lint && pnpm run typecheck && pnpm run svelte-check"
