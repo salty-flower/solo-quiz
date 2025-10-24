@@ -1,6 +1,6 @@
 <script lang="ts">
-  export let value = 0;
-  export let className = "";
+export let value = 0;
+export let className = "";
 </script>
 
 <div class={`relative h-2 w-full overflow-hidden rounded-full bg-muted ${className}`} {...$$restProps}>

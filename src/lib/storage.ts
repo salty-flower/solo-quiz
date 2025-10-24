@@ -39,7 +39,10 @@ async function getDb(): Promise<IDBPDatabase<SoloQuizDB> | null> {
         }
       },
     }).catch((error) => {
-      console.warn("IndexedDB unavailable, falling back to memory store", error);
+      console.warn(
+        "IndexedDB unavailable, falling back to memory store",
+        error,
+      );
       return null;
     });
   }

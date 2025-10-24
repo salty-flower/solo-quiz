@@ -25,14 +25,20 @@ type Option = z.infer<typeof optionSchema>;
 
 const singleQuestion = baseQuestion.extend({
   type: z.literal("single"),
-  options: z.array(optionSchema).min(2, "Single choice question requires at least two options"),
+  options: z
+    .array(optionSchema)
+    .min(2, "Single choice question requires at least two options"),
   correct: z.string().min(1, "Correct option id is required"),
 });
 
 const multiQuestion = baseQuestion.extend({
   type: z.literal("multi"),
-  options: z.array(optionSchema).min(2, "Multi-select question requires at least two options"),
-  correct: z.array(z.string().min(1)).min(1, "Provide at least one correct option id"),
+  options: z
+    .array(optionSchema)
+    .min(2, "Multi-select question requires at least two options"),
+  correct: z
+    .array(z.string().min(1))
+    .min(1, "Provide at least one correct option id"),
 });
 
 const normalizeModes = z.enum(["lower", "trim", "none"]).default("trim");
@@ -44,7 +50,7 @@ const fitbQuestion = baseQuestion.extend({
       z.union([
         z.string().min(1, "Accepted string must be non-empty"),
         z.object({ pattern: z.string(), flags: z.string().optional() }),
-      ])
+      ]),
     )
     .min(1, "Provide at least one acceptable answer"),
   normalize: normalizeModes.optional(),
@@ -100,13 +106,15 @@ export interface AssessmentParseError {
   message: string;
 }
 
-export function parseAssessment(raw: unknown): {
-  ok: true;
-  data: Assessment;
-} | {
-  ok: false;
-  issues: AssessmentParseError[];
-} {
+export function parseAssessment(raw: unknown):
+  | {
+      ok: true;
+      data: Assessment;
+    }
+  | {
+      ok: false;
+      issues: AssessmentParseError[];
+    } {
   const result = assessmentSchema.safeParse(raw);
   if (result.success) {
     return { ok: true, data: result.data };

@@ -1,492 +1,553 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick } from "svelte";
-  import Button from "./lib/components/ui/Button.svelte";
-  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./lib/components/ui/card";
-  import Separator from "./lib/components/ui/Separator.svelte";
-  import Progress from "./lib/components/ui/Progress.svelte";
-  import Switch from "./lib/components/ui/Switch.svelte";
-  import Dialog from "./lib/components/ui/Dialog.svelte";
-  import Alert from "./lib/components/ui/Alert.svelte";
-  import { renderWithKatex } from "./lib/katex";
-  import {
-    parseAssessment,
-    questionWeight,
-    type Assessment,
-    type Question,
-    type FitbQuestion,
-    type MultiQuestion,
-    type NumericQuestion,
-    type OrderingQuestion,
-    type SingleQuestion,
-  } from "./lib/schema";
-  import {
-    clearRecentFiles,
-    getRecentFiles,
-    touchRecentFile,
-    type RecentFileEntry,
-  } from "./lib/storage";
-  import { buildCsv, downloadCsv, type CsvQuestionResult, type CsvSummary } from "./lib/csv";
+import { onDestroy, onMount, tick } from "svelte";
+import Button from "./lib/components/ui/Button.svelte";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./lib/components/ui/card";
+import Separator from "./lib/components/ui/Separator.svelte";
+import Progress from "./lib/components/ui/Progress.svelte";
+import Switch from "./lib/components/ui/Switch.svelte";
+import Dialog from "./lib/components/ui/Dialog.svelte";
+import Alert from "./lib/components/ui/Alert.svelte";
+import { renderWithKatex } from "./lib/katex";
+import {
+  parseAssessment,
+  questionWeight,
+  type Assessment,
+  type Question,
+  type FitbQuestion,
+  type MultiQuestion,
+  type NumericQuestion,
+  type OrderingQuestion,
+  type SingleQuestion,
+} from "./lib/schema";
+import {
+  clearRecentFiles,
+  getRecentFiles,
+  touchRecentFile,
+  type RecentFileEntry,
+} from "./lib/storage";
+import {
+  buildCsv,
+  downloadCsv,
+  type CsvQuestionResult,
+  type CsvSummary,
+} from "./lib/csv";
 
-  const formatter = new Intl.DateTimeFormat(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+const formatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "short",
+  timeStyle: "short",
+});
 
-  interface QuestionResult {
-    question: Question;
-    earned: number;
-    max: number;
-    isCorrect: boolean;
-    userAnswer: string;
-    correctAnswer: string;
-    feedback?: string;
+interface QuestionResult {
+  question: Question;
+  earned: number;
+  max: number;
+  isCorrect: boolean;
+  userAnswer: string;
+  correctAnswer: string;
+  feedback?: string;
+}
+
+interface SubmissionSummary {
+  results: QuestionResult[];
+  totalScore: number;
+  maxScore: number;
+  percentage: number;
+  startedAt: Date;
+  completedAt: Date;
+  elapsedSec: number;
+  autoSubmitted: boolean;
+}
+
+type AnswerValue = string | string[] | null;
+
+let fileInput: HTMLInputElement | null = null;
+let dropActive = false;
+let recentFiles: RecentFileEntry[] = [];
+let assessment: Assessment | null = null;
+let questions: Question[] = [];
+let answers: Record<string, AnswerValue> = {};
+let touchedQuestions = new Set<string>();
+let currentIndex = 0;
+let currentQuestion: Question | undefined = undefined;
+let currentResult: QuestionResult | null = null;
+let parseErrors: { path: string; message: string }[] = [];
+let startedAt: Date | null = null;
+let elapsedSec = 0;
+let timerId: number | null = null;
+let timeLimitSec: number | null = null;
+let timeRemaining: number | null = null;
+let submitted = false;
+let submission: SubmissionSummary | null = null;
+let showResultDialog = false;
+let requireAllAnswered = false;
+let questionContainer: HTMLDivElement | null = null;
+let theme: "light" | "dark" = "light";
+let orderingTouched = new Set<string>();
+
+const SYSTEM_PREFERS_DARK = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+function loadTheme() {
+  if (typeof localStorage === "undefined") return;
+  const stored = localStorage.getItem("solo-quiz-theme");
+  if (stored === "light" || stored === "dark") {
+    theme = stored;
+    return;
   }
+  theme = SYSTEM_PREFERS_DARK() ? "dark" : "light";
+}
 
-  interface SubmissionSummary {
-    results: QuestionResult[];
-    totalScore: number;
-    maxScore: number;
-    percentage: number;
-    startedAt: Date;
-    completedAt: Date;
-    elapsedSec: number;
-    autoSubmitted: boolean;
+function applyTheme() {
+  if (typeof document === "undefined") return;
+  document.documentElement.classList.remove("light", "dark");
+  document.documentElement.classList.add(theme);
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem("solo-quiz-theme", theme);
   }
+}
 
-  type AnswerValue = string | string[] | null;
-
-  let fileInput: HTMLInputElement | null = null;
-  let dropActive = false;
-  let recentFiles: RecentFileEntry[] = [];
-  let assessment: Assessment | null = null;
-  let questions: Question[] = [];
-  let answers: Record<string, AnswerValue> = {};
-  let touchedQuestions = new Set<string>();
-  let currentIndex = 0;
-  let currentQuestion: Question | undefined = undefined;
-  let currentResult: QuestionResult | null = null;
-  let parseErrors: { path: string; message: string }[] = [];
-  let startedAt: Date | null = null;
-  let elapsedSec = 0;
-  let timerId: number | null = null;
-  let timeLimitSec: number | null = null;
-  let timeRemaining: number | null = null;
-  let submitted = false;
-  let submission: SubmissionSummary | null = null;
-  let showResultDialog = false;
-  let requireAllAnswered = false;
-  let questionContainer: HTMLDivElement | null = null;
-  let theme: "light" | "dark" = "light";
-  let orderingTouched = new Set<string>();
-
-  const SYSTEM_PREFERS_DARK = () =>
-    typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-  function loadTheme() {
-    if (typeof localStorage === "undefined") return;
-    const stored = localStorage.getItem("solo-quiz-theme");
-    if (stored === "light" || stored === "dark") {
-      theme = stored;
-      return;
-    }
-    theme = SYSTEM_PREFERS_DARK() ? "dark" : "light";
-  }
-
-  function applyTheme() {
-    if (typeof document === "undefined") return;
-    document.documentElement.classList.remove("light", "dark");
-    document.documentElement.classList.add(theme);
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem("solo-quiz-theme", theme);
-    }
-  }
-
-  onMount(async () => {
-    loadTheme();
-    applyTheme();
-    recentFiles = await getRecentFiles();
-  });
+onMount(async () => {
+  loadTheme();
+  applyTheme();
+  recentFiles = await getRecentFiles();
+});
 
 $: if (theme) applyTheme();
 
-  onDestroy(() => {
-    if (timerId) {
-      window.clearInterval(timerId);
-    }
-  });
-
-  $: answeredCount = [...touchedQuestions].length;
-  $: totalQuestions = questions.length;
-  $: currentQuestion = questions[currentIndex];
-  $: currentResult = submission ? submission.results[currentIndex] ?? null : null;
-  $: progressValue = totalQuestions === 0 ? 0 : Math.round((answeredCount / totalQuestions) * 100);
-  $: hasAnyAnswer = answeredCount > 0;
-  $: submitDisabled =
-    !assessment || submitted || (!hasAnyAnswer || (requireAllAnswered && answeredCount < totalQuestions));
-  $: timeDisplay = timeRemaining !== null ? formatTime(timeRemaining) : formatTime(elapsedSec);
-
-  function formatTime(sec: number): string {
-    const minutes = Math.floor(sec / 60)
-      .toString()
-      .padStart(2, "0");
-    const seconds = Math.floor(sec % 60)
-      .toString()
-      .padStart(2, "0");
-    return `${minutes}:${seconds}`;
+onDestroy(() => {
+  if (timerId) {
+    window.clearInterval(timerId);
   }
+});
 
-  function resetState(data: Assessment, sourceName?: string) {
-    assessment = data;
-    const baseQuestions = data.questions;
-    questions = data.meta.shuffleQuestions ? shuffle(baseQuestions) : [...baseQuestions];
-    answers = {};
-    touchedQuestions = new Set();
-    orderingTouched = new Set();
-    for (const question of questions) {
-      if (question.type === "multi" || question.type === "ordering") {
-        answers[question.id] = [...(question.type === "ordering" ? question.items : [])];
-      } else {
-        answers[question.id] = "";
-      }
-    }
-    touchedQuestions = new Set();
-    currentIndex = 0;
-    parseErrors = [];
-    submitted = false;
-    submission = null;
-    startedAt = new Date();
-    elapsedSec = 0;
-    timeLimitSec = data.meta.timeLimitSec ?? null;
-    timeRemaining = timeLimitSec;
-    if (timerId) {
-      window.clearInterval(timerId);
-    }
-    timerId = window.setInterval(() => {
-      if (!startedAt) return;
-      elapsedSec = Math.floor((Date.now() - startedAt.getTime()) / 1000);
-      if (timeLimitSec !== null) {
-        const remaining = Math.max(0, timeLimitSec - elapsedSec);
-        timeRemaining = remaining;
-        if (remaining === 0 && !submitted) {
-          submitQuiz(true);
-        }
-      }
-    }, 1000);
-    if (sourceName) {
-      touchRecentFile(sourceName).then(async () => {
-        recentFiles = await getRecentFiles();
-      });
+$: answeredCount = [...touchedQuestions].length;
+$: totalQuestions = questions.length;
+$: currentQuestion = questions[currentIndex];
+$: currentResult = submission
+  ? (submission.results[currentIndex] ?? null)
+  : null;
+$: progressValue =
+  totalQuestions === 0 ? 0 : Math.round((answeredCount / totalQuestions) * 100);
+$: hasAnyAnswer = answeredCount > 0;
+$: submitDisabled =
+  !assessment ||
+  submitted ||
+  !hasAnyAnswer ||
+  (requireAllAnswered && answeredCount < totalQuestions);
+$: timeDisplay =
+  timeRemaining !== null ? formatTime(timeRemaining) : formatTime(elapsedSec);
+
+function formatTime(sec: number): string {
+  const minutes = Math.floor(sec / 60)
+    .toString()
+    .padStart(2, "0");
+  const seconds = Math.floor(sec % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function resetState(data: Assessment, sourceName?: string) {
+  assessment = data;
+  const baseQuestions = data.questions;
+  questions = data.meta.shuffleQuestions
+    ? shuffle(baseQuestions)
+    : [...baseQuestions];
+  answers = {};
+  touchedQuestions = new Set();
+  orderingTouched = new Set();
+  for (const question of questions) {
+    if (question.type === "multi" || question.type === "ordering") {
+      answers[question.id] = [
+        ...(question.type === "ordering" ? question.items : []),
+      ];
+    } else {
+      answers[question.id] = "";
     }
   }
-
-  function shuffle<T>(array: T[]): T[] {
-    const copy = [...array];
-    for (let i = copy.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
+  touchedQuestions = new Set();
+  currentIndex = 0;
+  parseErrors = [];
+  submitted = false;
+  submission = null;
+  startedAt = new Date();
+  elapsedSec = 0;
+  timeLimitSec = data.meta.timeLimitSec ?? null;
+  timeRemaining = timeLimitSec;
+  if (timerId) {
+    window.clearInterval(timerId);
   }
-
-  async function handleFile(file: File) {
-    try {
-      const text = await file.text();
-      const raw = JSON.parse(text);
-      const result = parseAssessment(raw);
-      if (!result.ok) {
-        parseErrors = result.issues;
-        assessment = null;
-        questions = [];
-        return;
+  timerId = window.setInterval(() => {
+    if (!startedAt) return;
+    elapsedSec = Math.floor((Date.now() - startedAt.getTime()) / 1000);
+    if (timeLimitSec !== null) {
+      const remaining = Math.max(0, timeLimitSec - elapsedSec);
+      timeRemaining = remaining;
+      if (remaining === 0 && !submitted) {
+        submitQuiz(true);
       }
-      resetState(result.data, file.name);
-    } catch (error) {
-      parseErrors = [{ path: "file", message: (error as Error).message }];
+    }
+  }, 1000);
+  if (sourceName) {
+    touchRecentFile(sourceName).then(async () => {
+      recentFiles = await getRecentFiles();
+    });
+  }
+}
+
+function shuffle<T>(array: T[]): T[] {
+  const copy = [...array];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+async function handleFile(file: File) {
+  try {
+    const text = await file.text();
+    const raw = JSON.parse(text);
+    const result = parseAssessment(raw);
+    if (!result.ok) {
+      parseErrors = result.issues;
       assessment = null;
       questions = [];
+      return;
     }
+    resetState(result.data, file.name);
+  } catch (error) {
+    parseErrors = [{ path: "file", message: (error as Error).message }];
+    assessment = null;
+    questions = [];
   }
+}
 
-  function onFileInputChange(event: Event) {
-    const target = event.target as HTMLInputElement;
-    const files = target.files;
-    if (!files || files.length === 0) return;
-    void handleFile(files[0]);
-    target.value = "";
+function onFileInputChange(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const files = target.files;
+  if (!files || files.length === 0) return;
+  void handleFile(files[0]);
+  target.value = "";
+}
+
+function onDrop(event: DragEvent) {
+  event.preventDefault();
+  dropActive = false;
+  if (!event.dataTransfer) return;
+  const file = event.dataTransfer.files?.[0];
+  if (file) {
+    void handleFile(file);
   }
+}
 
-  function onDrop(event: DragEvent) {
+function onDragOver(event: DragEvent) {
+  event.preventDefault();
+  dropActive = true;
+}
+
+function onDragLeave(event: DragEvent) {
+  event.preventDefault();
+  dropActive = false;
+}
+
+function handleDropzoneKey(event: KeyboardEvent) {
+  if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
-    dropActive = false;
-    if (!event.dataTransfer) return;
-    const file = event.dataTransfer.files?.[0];
-    if (file) {
-      void handleFile(file);
+    fileInput?.click();
+  }
+}
+
+function updateTouched(question: Question, value: AnswerValue) {
+  answers = { ...answers, [question.id]: value };
+  const answered = isAnswered(question, value);
+  const clone = new Set(touchedQuestions);
+  if (answered) {
+    clone.add(question.id);
+  } else {
+    clone.delete(question.id);
+  }
+  touchedQuestions = clone;
+}
+
+function isAnswered(
+  question: Question,
+  value: AnswerValue = answers[question.id],
+): boolean {
+  if (value == null) return false;
+  if (question.type === "ordering") {
+    if (!orderingTouched.has(question.id)) {
+      return false;
     }
+    const arr = value as string[];
+    return arr.length > 0;
   }
-
-  function onDragOver(event: DragEvent) {
-    event.preventDefault();
-    dropActive = true;
+  if (question.type === "multi") {
+    const arr = value as string[];
+    return arr.length > 0;
   }
+  const str = String(value);
+  return str.trim().length > 0;
+}
 
-  function onDragLeave(event: DragEvent) {
-    event.preventDefault();
-    dropActive = false;
+function arraysEqual(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((val, index) => val === b[index]);
+}
+
+async function navigateTo(index: number) {
+  if (index < 0 || index >= questions.length) return;
+  currentIndex = index;
+  await tick();
+  questionContainer?.focus();
+}
+
+function normalizeFitbAnswer(question: FitbQuestion, value: string): string {
+  const mode = question.normalize ?? "trim";
+  if (mode === "trim") {
+    return value.trim();
   }
+  if (mode === "lower") {
+    return value.trim().toLowerCase();
+  }
+  return value;
+}
 
-  function handleDropzoneKey(event: KeyboardEvent) {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      fileInput?.click();
+function checkQuestion(question: Question, value: AnswerValue): QuestionResult {
+  let isCorrect = false;
+  let earned = 0;
+  const max = questionWeight(question);
+  let userAnswer = "";
+  let correctAnswer = "";
+
+  switch (question.type) {
+    case "single": {
+      const single = question as SingleQuestion;
+      const selected = typeof value === "string" ? value : "";
+      userAnswer = renderOptionLabels(single, selected ? [selected] : []);
+      correctAnswer = renderOptionLabels(single, [single.correct]);
+      isCorrect = selected === single.correct;
+      break;
     }
-  }
-
-  function updateTouched(question: Question, value: AnswerValue) {
-    answers = { ...answers, [question.id]: value };
-    const answered = isAnswered(question, value);
-    const clone = new Set(touchedQuestions);
-    if (answered) {
-      clone.add(question.id);
-    } else {
-      clone.delete(question.id);
+    case "multi": {
+      const multi = question as MultiQuestion;
+      const selected = Array.isArray(value) ? (value as string[]) : [];
+      userAnswer = renderOptionLabels(multi, selected);
+      correctAnswer = renderOptionLabels(multi, multi.correct);
+      const normalizedSelected = [...selected].sort();
+      const normalizedCorrect = [...multi.correct].sort();
+      isCorrect = arraysEqual(normalizedSelected, normalizedCorrect);
+      break;
     }
-    touchedQuestions = clone;
-  }
-
-  function isAnswered(question: Question, value: AnswerValue = answers[question.id]): boolean {
-    if (value == null) return false;
-    if (question.type === "ordering") {
-      if (!orderingTouched.has(question.id)) {
-        return false;
-      }
-      const arr = value as string[];
-      return arr.length > 0;
-    }
-    if (question.type === "multi") {
-      const arr = value as string[];
-      return arr.length > 0;
-    }
-    const str = String(value);
-    return str.trim().length > 0;
-  }
-
-  function arraysEqual(a: string[], b: string[]): boolean {
-    return a.length === b.length && a.every((val, index) => val === b[index]);
-  }
-
-  async function navigateTo(index: number) {
-    if (index < 0 || index >= questions.length) return;
-    currentIndex = index;
-    await tick();
-    questionContainer?.focus();
-  }
-
-  function normalizeFitbAnswer(question: FitbQuestion, value: string): string {
-    const mode = question.normalize ?? "trim";
-    if (mode === "trim") {
-      return value.trim();
-    }
-    if (mode === "lower") {
-      return value.trim().toLowerCase();
-    }
-    return value;
-  }
-
-  function checkQuestion(question: Question, value: AnswerValue): QuestionResult {
-    let isCorrect = false;
-    let earned = 0;
-    const max = questionWeight(question);
-    let userAnswer = "";
-    let correctAnswer = "";
-
-    switch (question.type) {
-      case "single": {
-        const single = question as SingleQuestion;
-        const selected = typeof value === "string" ? value : "";
-        userAnswer = renderOptionLabels(single, selected ? [selected] : []);
-        correctAnswer = renderOptionLabels(single, [single.correct]);
-        isCorrect = selected === single.correct;
-        break;
-      }
-      case "multi": {
-        const multi = question as MultiQuestion;
-        const selected = Array.isArray(value) ? (value as string[]) : [];
-        userAnswer = renderOptionLabels(multi, selected);
-        correctAnswer = renderOptionLabels(multi, multi.correct);
-        const normalizedSelected = [...selected].sort();
-        const normalizedCorrect = [...multi.correct].sort();
-        isCorrect = arraysEqual(normalizedSelected, normalizedCorrect);
-        break;
-      }
-      case "fitb": {
-        const fitb = question as FitbQuestion;
-        const text = typeof value === "string" ? value : "";
-        userAnswer = text;
-        const normalized = normalizeFitbAnswer(fitb, text);
-        isCorrect = fitb.accept.some((entry) => {
-          if (typeof entry === "string") {
-            return normalizeFitbAnswer(fitb, entry) === normalized;
-          }
-          try {
-            const regex = new RegExp(entry.pattern, entry.flags);
-            return regex.test(text);
-          } catch (error) {
-            console.warn("Invalid FITB regex", error);
-            return false;
-          }
-        });
-        correctAnswer = fitb.accept
-          .map((entry) => (typeof entry === "string" ? entry : `/${entry.pattern}/${entry.flags ?? ""}`))
-          .join(", ");
-        break;
-      }
-      case "numeric": {
-        const numeric = question as NumericQuestion;
-        const text = typeof value === "string" ? value.trim() : "";
-        userAnswer = text;
-        const parsed = Number.parseFloat(text);
-        if (!Number.isNaN(parsed)) {
-          const tolerance = numeric.tolerance ?? 0;
-          isCorrect = Math.abs(parsed - numeric.correct) <= tolerance;
-        } else {
-          isCorrect = false;
+    case "fitb": {
+      const fitb = question as FitbQuestion;
+      const text = typeof value === "string" ? value : "";
+      userAnswer = text;
+      const normalized = normalizeFitbAnswer(fitb, text);
+      isCorrect = fitb.accept.some((entry) => {
+        if (typeof entry === "string") {
+          return normalizeFitbAnswer(fitb, entry) === normalized;
         }
-        correctAnswer = numeric.tolerance
-          ? `${numeric.correct} ± ${numeric.tolerance}`
-          : numeric.correct.toString();
-        break;
-      }
-      case "ordering": {
-        const ordering = question as OrderingQuestion;
-        const sequence = Array.isArray(value) ? (value as string[]) : ordering.items;
-        userAnswer = sequence.join(" → ");
-        correctAnswer = ordering.correctOrder.join(" → ");
-        isCorrect = arraysEqual(sequence, ordering.correctOrder);
-        break;
-      }
-      default:
+        try {
+          const regex = new RegExp(entry.pattern, entry.flags);
+          return regex.test(text);
+        } catch (error) {
+          console.warn("Invalid FITB regex", error);
+          return false;
+        }
+      });
+      correctAnswer = fitb.accept
+        .map((entry) =>
+          typeof entry === "string"
+            ? entry
+            : `/${entry.pattern}/${entry.flags ?? ""}`,
+        )
+        .join(", ");
+      break;
+    }
+    case "numeric": {
+      const numeric = question as NumericQuestion;
+      const text = typeof value === "string" ? value.trim() : "";
+      userAnswer = text;
+      const parsed = Number.parseFloat(text);
+      if (!Number.isNaN(parsed)) {
+        const tolerance = numeric.tolerance ?? 0;
+        isCorrect = Math.abs(parsed - numeric.correct) <= tolerance;
+      } else {
         isCorrect = false;
+      }
+      correctAnswer = numeric.tolerance
+        ? `${numeric.correct} ± ${numeric.tolerance}`
+        : numeric.correct.toString();
+      break;
     }
-
-    if (isCorrect) {
-      earned = max;
+    case "ordering": {
+      const ordering = question as OrderingQuestion;
+      const sequence = Array.isArray(value)
+        ? (value as string[])
+        : ordering.items;
+      userAnswer = sequence.join(" → ");
+      correctAnswer = ordering.correctOrder.join(" → ");
+      isCorrect = arraysEqual(sequence, ordering.correctOrder);
+      break;
     }
-
-    const feedback = isCorrect ? question.feedback?.correct : question.feedback?.incorrect;
-    return { question, earned, max, isCorrect, userAnswer, correctAnswer, feedback };
+    default:
+      isCorrect = false;
   }
 
-  function renderOptionLabels(question: SingleQuestion | MultiQuestion, ids: string[]): string {
-    const map = new Map(question.options.map((option) => [option.id, option.label] as const));
-    return ids.map((id) => map.get(id) ?? id).join(", ");
+  if (isCorrect) {
+    earned = max;
   }
 
-  function submitQuiz(auto = false) {
-    if (!assessment || submitted) return;
-    submitted = true;
-    if (timerId) {
-      window.clearInterval(timerId);
-      timerId = null;
-    }
-    const completedAt = new Date();
-    const results = questions.map((question) => checkQuestion(question, answers[question.id]));
-    const totalScore = results.reduce((sum, result) => sum + result.earned, 0);
-    const maxScore = results.reduce((sum, result) => sum + result.max, 0);
-    const percentage = maxScore === 0 ? 0 : (totalScore / maxScore) * 100;
-    const elapsed = startedAt ? Math.max(0, Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000)) : elapsedSec;
-    submission = {
-      results,
-      totalScore,
-      maxScore,
-      percentage,
-      startedAt: startedAt ?? new Date(),
-      completedAt,
-      elapsedSec: elapsed,
-      autoSubmitted: auto,
-    };
-    showResultDialog = true;
-  }
+  const feedback = isCorrect
+    ? question.feedback?.correct
+    : question.feedback?.incorrect;
+  return {
+    question,
+    earned,
+    max,
+    isCorrect,
+    userAnswer,
+    correctAnswer,
+    feedback,
+  };
+}
 
-  function resetAssessment() {
-    if (!assessment) return;
-    resetState(assessment);
-  }
+function renderOptionLabels(
+  question: SingleQuestion | MultiQuestion,
+  ids: string[],
+): string {
+  const map = new Map(
+    question.options.map((option) => [option.id, option.label] as const),
+  );
+  return ids.map((id) => map.get(id) ?? id).join(", ");
+}
 
-  function exportCsv() {
-    if (!assessment || !submission) return;
-    const rows: CsvQuestionResult[] = submission.results.map((result, index) => ({
-      questionNumber: index + 1,
-      questionId: result.question.id,
-      questionText: result.question.text,
-      type: result.question.type,
-      weight: questionWeight(result.question),
-      tags: result.question.tags ?? [],
-      userAnswer: result.userAnswer,
-      correctAnswer: result.correctAnswer,
-      isCorrect: result.isCorrect,
-    }));
-    const summary: CsvSummary = {
-      assessmentTitle: assessment.meta.title,
-      totalScore: submission.totalScore,
-      maxScore: submission.maxScore,
-      percentage: submission.percentage,
-      startedAt: submission.startedAt,
-      completedAt: submission.completedAt,
-      timeElapsedSec: submission.elapsedSec,
-    };
-    const csv = buildCsv(summary, rows);
-    downloadCsv(`${sanitizeFilename(assessment.meta.title)}-results.csv`, csv);
+function submitQuiz(auto = false) {
+  if (!assessment || submitted) return;
+  submitted = true;
+  if (timerId) {
+    window.clearInterval(timerId);
+    timerId = null;
   }
+  const completedAt = new Date();
+  const results = questions.map((question) =>
+    checkQuestion(question, answers[question.id]),
+  );
+  const totalScore = results.reduce((sum, result) => sum + result.earned, 0);
+  const maxScore = results.reduce((sum, result) => sum + result.max, 0);
+  const percentage = maxScore === 0 ? 0 : (totalScore / maxScore) * 100;
+  const elapsed = startedAt
+    ? Math.max(
+        0,
+        Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000),
+      )
+    : elapsedSec;
+  submission = {
+    results,
+    totalScore,
+    maxScore,
+    percentage,
+    startedAt: startedAt ?? new Date(),
+    completedAt,
+    elapsedSec: elapsed,
+    autoSubmitted: auto,
+  };
+  showResultDialog = true;
+}
 
-  function sanitizeFilename(value: string): string {
-    return value.replace(/[^a-z0-9-_]+/gi, "-");
-  }
+function resetAssessment() {
+  if (!assessment) return;
+  resetState(assessment);
+}
 
-  function exportAssessment() {
-    if (!assessment) return;
-    const blob = new Blob([JSON.stringify(assessment, null, 2)], {
-      type: "application/json;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${sanitizeFilename(assessment.meta.title)}.json`;
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  }
+function exportCsv() {
+  if (!assessment || !submission) return;
+  const rows: CsvQuestionResult[] = submission.results.map((result, index) => ({
+    questionNumber: index + 1,
+    questionId: result.question.id,
+    questionText: result.question.text,
+    type: result.question.type,
+    weight: questionWeight(result.question),
+    tags: result.question.tags ?? [],
+    userAnswer: result.userAnswer,
+    correctAnswer: result.correctAnswer,
+    isCorrect: result.isCorrect,
+  }));
+  const summary: CsvSummary = {
+    assessmentTitle: assessment.meta.title,
+    totalScore: submission.totalScore,
+    maxScore: submission.maxScore,
+    percentage: submission.percentage,
+    startedAt: submission.startedAt,
+    completedAt: submission.completedAt,
+    timeElapsedSec: submission.elapsedSec,
+  };
+  const csv = buildCsv(summary, rows);
+  downloadCsv(`${sanitizeFilename(assessment.meta.title)}-results.csv`, csv);
+}
 
-  function toggleTheme(event: CustomEvent<boolean>) {
-    theme = event.detail ? "dark" : "light";
-  }
+function sanitizeFilename(value: string): string {
+  return value.replace(/[^a-z0-9-_]+/gi, "-");
+}
 
-  function moveOrdering(question: OrderingQuestion, index: number, direction: -1 | 1) {
-    const current = Array.isArray(answers[question.id])
-      ? ([...(answers[question.id] as string[])] as string[])
-      : [...question.items];
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= current.length) return;
-    [current[index], current[targetIndex]] = [current[targetIndex], current[index]];
-    setOrderingTouched(question.id, true);
-    updateTouched(question, current);
-  }
+function exportAssessment() {
+  if (!assessment) return;
+  const blob = new Blob([JSON.stringify(assessment, null, 2)], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${sanitizeFilename(assessment.meta.title)}.json`;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
 
-  function resetOrdering(question: OrderingQuestion) {
-    setOrderingTouched(question.id, false);
-    updateTouched(question, [...question.items]);
-  }
+function toggleTheme(event: CustomEvent<boolean>) {
+  theme = event.detail ? "dark" : "light";
+}
 
-  function setOrderingTouched(questionId: string, value: boolean) {
-    const clone = new Set(orderingTouched);
-    if (value) {
-      clone.add(questionId);
-    } else {
-      clone.delete(questionId);
-    }
-    orderingTouched = clone;
+function moveOrdering(
+  question: OrderingQuestion,
+  index: number,
+  direction: -1 | 1,
+) {
+  const current = Array.isArray(answers[question.id])
+    ? ([...(answers[question.id] as string[])] as string[])
+    : [...question.items];
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= current.length) return;
+  [current[index], current[targetIndex]] = [
+    current[targetIndex],
+    current[index],
+  ];
+  setOrderingTouched(question.id, true);
+  updateTouched(question, current);
+}
+
+function resetOrdering(question: OrderingQuestion) {
+  setOrderingTouched(question.id, false);
+  updateTouched(question, [...question.items]);
+}
+
+function setOrderingTouched(questionId: string, value: boolean) {
+  const clone = new Set(orderingTouched);
+  if (value) {
+    clone.add(questionId);
+  } else {
+    clone.delete(questionId);
   }
+  orderingTouched = clone;
+}
 </script>
 
 <svelte:window on:dragover|preventDefault={onDragOver} on:drop={onDrop} />

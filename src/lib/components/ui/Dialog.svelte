@@ -1,37 +1,37 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from "svelte";
+import { createEventDispatcher, onMount } from "svelte";
 
-  export let open = false;
-  export let title = "Dialog";
+export let open = false;
+export let title = "Dialog";
 
-  const dispatch = createEventDispatcher<{ close: undefined }>();
-  let previousFocus: HTMLElement | null = null;
-  let dialogEl: HTMLDivElement | null = null;
+const dispatch = createEventDispatcher<{ close: undefined }>();
+let previousFocus: HTMLElement | null = null;
+let dialogEl: HTMLDivElement | null = null;
 
-  function close() {
-    dispatch("close");
+function close() {
+  dispatch("close");
+}
+
+function handleKey(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    close();
   }
+}
 
-  function handleKey(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      close();
-    }
-  }
-
-  onMount(() => {
-    if (open && typeof document !== "undefined") {
-      previousFocus = document.activeElement as HTMLElement | null;
-      dialogEl?.focus();
-    }
-  });
-
-  $: if (open && typeof document !== "undefined") {
+onMount(() => {
+  if (open && typeof document !== "undefined") {
     previousFocus = document.activeElement as HTMLElement | null;
-    setTimeout(() => dialogEl?.focus(), 0);
-  } else if (!open && previousFocus) {
-    previousFocus.focus();
-    previousFocus = null;
+    dialogEl?.focus();
   }
+});
+
+$: if (open && typeof document !== "undefined") {
+  previousFocus = document.activeElement as HTMLElement | null;
+  setTimeout(() => dialogEl?.focus(), 0);
+} else if (!open && previousFocus) {
+  previousFocus.focus();
+  previousFocus = null;
+}
 </script>
 
 {#if open}

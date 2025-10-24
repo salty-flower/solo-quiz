@@ -12,7 +12,11 @@
       "type": "single",
       "text": "What is the derivative of $x^2$?",
       "options": [
-        { "id": "a", "label": "$2x$", "explanation": "d/dx of $x^n$ is $nx^{n-1}$." },
+        {
+          "id": "a",
+          "label": "$2x$",
+          "explanation": "d/dx of $x^n$ is $nx^{n-1}$."
+        },
         { "id": "b", "label": "$x$" },
         { "id": "c", "label": "$x^3$" }
       ],

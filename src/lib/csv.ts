@@ -24,7 +24,10 @@ function escapeCsv(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
-export function buildCsv(summary: CsvSummary, rows: CsvQuestionResult[]): string {
+export function buildCsv(
+  summary: CsvSummary,
+  rows: CsvQuestionResult[],
+): string {
   const header = [
     "Question #",
     "Question ID",

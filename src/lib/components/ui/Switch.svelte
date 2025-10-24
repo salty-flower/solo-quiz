@@ -1,24 +1,24 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
+import { createEventDispatcher } from "svelte";
 
-  export let checked = false;
-  export let disabled = false;
-  export let label: string | undefined;
+export let checked = false;
+export let disabled = false;
+export let label: string | undefined;
 
-  const dispatch = createEventDispatcher<{ change: boolean }>();
+const dispatch = createEventDispatcher<{ change: boolean }>();
 
-  function toggle() {
-    if (disabled) return;
-    checked = !checked;
-    dispatch("change", checked);
+function toggle() {
+  if (disabled) return;
+  checked = !checked;
+  dispatch("change", checked);
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === " " || event.key === "Spacebar" || event.key === "Enter") {
+    event.preventDefault();
+    toggle();
   }
-
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === " " || event.key === "Spacebar" || event.key === "Enter") {
-      event.preventDefault();
-      toggle();
-    }
-  }
+}
 </script>
 
 <button

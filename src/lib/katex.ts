@@ -3,7 +3,8 @@ import katexImport from "katex";
 type KatexInstance = typeof katexImport;
 
 function resolveKatex(): KatexInstance {
-  const globalKatex = (globalThis as unknown as { katex?: KatexInstance }).katex;
+  const globalKatex = (globalThis as unknown as { katex?: KatexInstance })
+    .katex;
   const instance = katexImport ?? globalKatex;
   if (!instance) {
     throw new Error("KaTeX is not available in the current build");
@@ -20,7 +21,10 @@ interface Token {
 }
 
 function escapeHtml(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function tokenizeMath(input: string): Token[] {
