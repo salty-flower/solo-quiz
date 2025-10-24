@@ -20,6 +20,10 @@ const schemaDocument = {
 };
 
 await mkdir(path.dirname(outputPath), { recursive: true });
-await writeFile(outputPath, `${JSON.stringify(schemaDocument, null, 2)}\n`, "utf8");
+await writeFile(
+  outputPath,
+  `${JSON.stringify(schemaDocument, null, 2)}\n`,
+  "utf8",
+);
 
 console.log(`Assessment schema written to ${outputPath}`);
