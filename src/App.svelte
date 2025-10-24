@@ -107,7 +107,7 @@
     recentFiles = await getRecentFiles();
   });
 
-  $: applyTheme();
+  $: if (theme) applyTheme();
 
   onDestroy(() => {
     if (timerId) {
