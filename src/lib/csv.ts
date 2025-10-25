@@ -1,8 +1,9 @@
 export interface CsvSummary {
   assessmentTitle: string;
-  totalScore: number;
-  maxScore: number;
-  percentage: number;
+  deterministicScore: number;
+  deterministicMax: number;
+  deterministicPercentage: number;
+  pendingSubjectiveMax: number;
   startedAt: Date;
   completedAt: Date;
   timeElapsedSec: number;
@@ -17,7 +18,9 @@ export interface CsvQuestionResult {
   tags: string[];
   userAnswer: string;
   correctAnswer: string;
-  isCorrect: boolean;
+  earned: number | null;
+  max: number;
+  result: "correct" | "incorrect" | "pending";
 }
 
 function escapeCsv(value: string): string {
@@ -37,7 +40,9 @@ export function buildCsv(
     "Question",
     "Your Answer",
     "Correct Answer",
-    "Correct?",
+    "Earned",
+    "Max",
+    "Result",
   ];
 
   const lines = [header.map(escapeCsv).join(",")];
@@ -52,7 +57,9 @@ export function buildCsv(
         row.questionText,
         row.userAnswer,
         row.correctAnswer,
-        row.isCorrect ? "true" : "false",
+        row.earned == null ? "" : row.earned.toString(),
+        row.max.toString(),
+        row.result,
       ]
         .map(escapeCsv)
         .join(","),
@@ -65,9 +72,11 @@ export function buildCsv(
       "Summary",
       summary.assessmentTitle,
       "Score",
-      `${summary.totalScore} / ${summary.maxScore}`,
-      "Percentage",
-      `${summary.percentage.toFixed(2)}%`,
+      `${summary.deterministicScore} / ${summary.deterministicMax}`,
+      "Deterministic %",
+      `${summary.deterministicPercentage.toFixed(2)}%`,
+      "Pending Subjective Max",
+      summary.pendingSubjectiveMax.toString(),
       "Time Elapsed (s)",
       summary.timeElapsedSec.toString(),
       "Completed",

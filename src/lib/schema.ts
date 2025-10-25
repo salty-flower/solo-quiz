@@ -13,6 +13,11 @@ const feedbackSchema = z
   })
   .optional();
 
+const rubricSchema = z.object({
+  title: z.string().min(1, "Rubric title is required"),
+  description: z.string().min(1, "Rubric description is required"),
+});
+
 const baseQuestion = z.object({
   id: z.string().min(1, "Question id is required"),
   text: z.string().min(1, "Question text is required"),
@@ -68,12 +73,18 @@ const orderingQuestion = baseQuestion.extend({
   correctOrder: z.array(z.string().min(1)).min(2),
 });
 
+const subjectiveQuestion = baseQuestion.extend({
+  type: z.literal("subjective"),
+  rubrics: z.array(rubricSchema).min(1, "Provide at least one rubric"),
+});
+
 export const questionSchema = z.discriminatedUnion("type", [
   singleQuestion,
   multiQuestion,
   fitbQuestion,
   numericQuestion,
   orderingQuestion,
+  subjectiveQuestion,
 ]);
 
 export type Question = z.infer<typeof questionSchema>;
@@ -83,6 +94,7 @@ export type MultiQuestion = z.infer<typeof multiQuestion>;
 export type FitbQuestion = z.infer<typeof fitbQuestion>;
 export type NumericQuestion = z.infer<typeof numericQuestion>;
 export type OrderingQuestion = z.infer<typeof orderingQuestion>;
+export type SubjectiveQuestion = z.infer<typeof subjectiveQuestion>;
 export type QuestionOption = Option;
 
 const metaSchema = z.object({
@@ -132,3 +144,25 @@ export function parseAssessment(raw: unknown):
 export function questionWeight(question: Question): number {
   return question.weight ?? 1;
 }
+
+export const llmFeedbackSchema = z.object({
+  verdict: z.enum(["correct", "incorrect", "partial"]),
+  score: z.number().min(0),
+  maxScore: z.number().positive(),
+  feedback: z.string().min(1, "Feedback text is required"),
+  rubricBreakdown: z
+    .array(
+      z.object({
+        rubric: z.string().min(1, "Rubric reference is required"),
+        comments: z.string().min(1, "Provide comments for this rubric"),
+        achievedFraction: z
+          .number()
+          .min(0, "Fraction cannot be negative")
+          .max(1, "Fraction cannot exceed 1"),
+      }),
+    )
+    .min(1, "Provide at least one rubric breakdown entry"),
+  improvements: z.array(z.string().min(1)).default([]),
+});
+
+export type LlmFeedback = z.infer<typeof llmFeedbackSchema>;

@@ -14,7 +14,8 @@
     "lint": "biome lint . --write",
     "typecheck": "tsc --noEmit",
     "svelte-check": "svelte-check --tsconfig ./tsconfig.app.json",
-    "check": "pnpm run lint && pnpm run typecheck && pnpm run svelte-check"
+    "check": "pnpm run lint && pnpm run typecheck && pnpm run svelte-check",
+    "test:examples": "tsx scripts/test-examples.ts"
   },
   "dependencies": {
     "idb": "^8.0.1",

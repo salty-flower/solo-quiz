@@ -24,6 +24,7 @@ import {
   type NumericQuestion,
   type OrderingQuestion,
   type SingleQuestion,
+  type SubjectiveQuestion,
 } from "./lib/schema";
 import {
   clearRecentFiles,
@@ -37,27 +38,49 @@ import {
   type CsvQuestionResult,
   type CsvSummary,
 } from "./lib/csv";
+import { buildSubjectivePrompt } from "./lib/llm";
 
 const formatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "short",
   timeStyle: "short",
 });
 
-interface QuestionResult {
+type ResultStatus = "correct" | "incorrect" | "pending";
+
+interface BaseQuestionResult {
   question: Question;
-  earned: number;
   max: number;
-  isCorrect: boolean;
   userAnswer: string;
   correctAnswer: string;
   feedback?: string;
+  status: ResultStatus;
 }
+
+interface DeterministicQuestionResult extends BaseQuestionResult {
+  requiresManualGrading: false;
+  earned: number;
+  isCorrect: boolean;
+  status: Exclude<ResultStatus, "pending">;
+}
+
+interface SubjectiveQuestionResult extends BaseQuestionResult {
+  question: SubjectiveQuestion;
+  requiresManualGrading: true;
+  earned: null;
+  isCorrect: null;
+  status: "pending";
+  rubrics: SubjectiveQuestion["rubrics"];
+}
+
+type QuestionResult = DeterministicQuestionResult | SubjectiveQuestionResult;
 
 interface SubmissionSummary {
   results: QuestionResult[];
-  totalScore: number;
-  maxScore: number;
-  percentage: number;
+  deterministicEarned: number;
+  deterministicMax: number;
+  deterministicPercentage: number;
+  subjectiveMax: number;
+  pendingSubjectiveCount: number;
   startedAt: Date;
   completedAt: Date;
   elapsedSec: number;
@@ -89,6 +112,9 @@ let requireAllAnswered = false;
 let questionContainer: HTMLDivElement | null = null;
 let theme: "light" | "dark" = "light";
 let orderingTouched = new Set<string>();
+let copiedPromptQuestionId: string | null = null;
+let promptCopyError: string | null = null;
+let promptCopyTimeout: number | null = null;
 
 const SYSTEM_PREFERS_DARK = () =>
   typeof window !== "undefined" &&
@@ -124,6 +150,9 @@ $: if (theme) applyTheme();
 onDestroy(() => {
   if (timerId) {
     window.clearInterval(timerId);
+  }
+  if (promptCopyTimeout) {
+    window.clearTimeout(promptCopyTimeout);
   }
 });
 
@@ -163,6 +192,12 @@ function resetState(data: Assessment, sourceName?: string) {
   answers = {};
   touchedQuestions = new Set();
   orderingTouched = new Set();
+  copiedPromptQuestionId = null;
+  promptCopyError = null;
+  if (promptCopyTimeout) {
+    window.clearTimeout(promptCopyTimeout);
+    promptCopyTimeout = null;
+  }
   for (const question of questions) {
     if (question.type === "multi" || question.type === "ordering") {
       answers[question.id] = [
@@ -320,11 +355,29 @@ function normalizeFitbAnswer(question: FitbQuestion, value: string): string {
 }
 
 function checkQuestion(question: Question, value: AnswerValue): QuestionResult {
-  let isCorrect = false;
-  let earned = 0;
   const max = questionWeight(question);
   let userAnswer = "";
   let correctAnswer = "";
+
+  if (question.type === "subjective") {
+    const subjective = question as SubjectiveQuestion;
+    userAnswer = typeof value === "string" ? value : "";
+    return {
+      question: subjective,
+      requiresManualGrading: true,
+      earned: null,
+      isCorrect: null,
+      status: "pending",
+      max,
+      userAnswer,
+      correctAnswer: "",
+      feedback: subjective.feedback?.incorrect ?? subjective.feedback?.correct,
+      rubrics: subjective.rubrics,
+    };
+  }
+
+  let isCorrect = false;
+  let earned = 0;
 
   switch (question.type) {
     case "single": {
@@ -408,11 +461,14 @@ function checkQuestion(question: Question, value: AnswerValue): QuestionResult {
   const feedback = isCorrect
     ? question.feedback?.correct
     : question.feedback?.incorrect;
+
   return {
     question,
+    requiresManualGrading: false,
     earned,
     max,
     isCorrect,
+    status: isCorrect ? "correct" : "incorrect",
     userAnswer,
     correctAnswer,
     feedback,
@@ -440,9 +496,28 @@ function submitQuiz(auto = false) {
   const results = questions.map((question) =>
     checkQuestion(question, answers[question.id]),
   );
-  const totalScore = results.reduce((sum, result) => sum + result.earned, 0);
-  const maxScore = results.reduce((sum, result) => sum + result.max, 0);
-  const percentage = maxScore === 0 ? 0 : (totalScore / maxScore) * 100;
+  const deterministicResults = results.filter(
+    (result): result is DeterministicQuestionResult =>
+      !result.requiresManualGrading,
+  );
+  const subjectiveResults = results.filter(
+    (result): result is SubjectiveQuestionResult =>
+      result.requiresManualGrading,
+  );
+  const deterministicEarned = deterministicResults.reduce(
+    (sum, result) => sum + result.earned,
+    0,
+  );
+  const deterministicMax = deterministicResults.reduce(
+    (sum, result) => sum + result.max,
+    0,
+  );
+  const deterministicPercentage =
+    deterministicMax === 0 ? 0 : (deterministicEarned / deterministicMax) * 100;
+  const subjectiveMax = subjectiveResults.reduce(
+    (sum, result) => sum + result.max,
+    0,
+  );
   const elapsed = startedAt
     ? Math.max(
         0,
@@ -451,9 +526,11 @@ function submitQuiz(auto = false) {
     : elapsedSec;
   submission = {
     results,
-    totalScore,
-    maxScore,
-    percentage,
+    deterministicEarned,
+    deterministicMax,
+    deterministicPercentage,
+    subjectiveMax,
+    pendingSubjectiveCount: subjectiveResults.length,
     startedAt: startedAt ?? new Date(),
     completedAt,
     elapsedSec: elapsed,
@@ -478,13 +555,16 @@ function exportCsv() {
     tags: result.question.tags ?? [],
     userAnswer: result.userAnswer,
     correctAnswer: result.correctAnswer,
-    isCorrect: result.isCorrect,
+    earned: result.requiresManualGrading ? null : result.earned,
+    max: result.max,
+    result: result.status,
   }));
   const summary: CsvSummary = {
     assessmentTitle: assessment.meta.title,
-    totalScore: submission.totalScore,
-    maxScore: submission.maxScore,
-    percentage: submission.percentage,
+    deterministicScore: submission.deterministicEarned,
+    deterministicMax: submission.deterministicMax,
+    deterministicPercentage: submission.deterministicPercentage,
+    pendingSubjectiveMax: submission.subjectiveMax,
     startedAt: submission.startedAt,
     completedAt: submission.completedAt,
     timeElapsedSec: submission.elapsedSec,
@@ -512,8 +592,107 @@ function exportAssessment() {
   URL.revokeObjectURL(url);
 }
 
+function exportJsonSummary() {
+  if (!assessment || !submission) return;
+  const data = {
+    assessment: {
+      title: assessment.meta.title,
+      description: assessment.meta.description ?? null,
+      timeLimitSec: assessment.meta.timeLimitSec ?? null,
+    },
+    deterministic: {
+      earned: submission.deterministicEarned,
+      max: submission.deterministicMax,
+      percentage: submission.deterministicPercentage,
+    },
+    subjective: {
+      pendingCount: submission.pendingSubjectiveCount,
+      max: submission.subjectiveMax,
+    },
+    timing: {
+      startedAt: submission.startedAt.toISOString(),
+      completedAt: submission.completedAt.toISOString(),
+      elapsedSec: submission.elapsedSec,
+      autoSubmitted: submission.autoSubmitted,
+    },
+    results: submission.results.map((result, index) => ({
+      position: index + 1,
+      questionId: result.question.id,
+      type: result.question.type,
+      weight: questionWeight(result.question),
+      tags: result.question.tags ?? [],
+      status: result.status,
+      earned: result.requiresManualGrading ? null : result.earned,
+      max: result.max,
+      userAnswer: result.userAnswer,
+      correctAnswer: result.correctAnswer,
+      feedback: result.feedback ?? null,
+      rubrics: result.requiresManualGrading ? result.rubrics : undefined,
+      llmPrompt: result.requiresManualGrading
+        ? buildSubjectivePrompt({
+            question: result.question,
+            userAnswer: result.userAnswer,
+            maxScore: result.max,
+          })
+        : undefined,
+    })),
+  };
+  const blob = new Blob([`${JSON.stringify(data, null, 2)}\n`], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${sanitizeFilename(assessment.meta.title)}-summary.json`;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 function toggleTheme(event: CustomEvent<boolean>) {
   theme = event.detail ? "dark" : "light";
+}
+
+async function copySubjectivePrompt(result: QuestionResult) {
+  if (promptCopyTimeout) {
+    window.clearTimeout(promptCopyTimeout);
+  }
+  copiedPromptQuestionId = result.question.id;
+  try {
+    if (!result.requiresManualGrading) {
+      throw new Error("Only subjective questions provide prompts.");
+    }
+    const prompt = buildSubjectivePrompt({
+      question: result.question,
+      userAnswer: result.userAnswer,
+      maxScore: result.max,
+    });
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(prompt);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = prompt;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "absolute";
+      textarea.style.left = "-9999px";
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
+    promptCopyError = null;
+  } catch (error) {
+    promptCopyError =
+      error instanceof Error
+        ? error.message
+        : "Unable to copy prompt to clipboard.";
+  }
+  promptCopyTimeout = window.setTimeout(() => {
+    copiedPromptQuestionId = null;
+    promptCopyError = null;
+    promptCopyTimeout = null;
+  }, 3000);
 }
 
 function moveOrdering(
@@ -713,7 +892,8 @@ function setOrderingTouched(questionId: string, value: boolean) {
             <div class="flex flex-wrap items-center gap-4">
               <div>
                 <p class="text-lg font-semibold">
-                  Score: {submission.totalScore} / {submission.maxScore} ({submission.percentage.toFixed(1)}%)
+                  Deterministic score: {submission.deterministicEarned} / {submission.deterministicMax}
+                  ({submission.deterministicPercentage.toFixed(1)}%)
                 </p>
                 <p class="text-xs text-muted-foreground">
                   Time used: {formatTime(submission.elapsedSec)}
@@ -721,9 +901,18 @@ function setOrderingTouched(questionId: string, value: boolean) {
                     — auto submitted when the timer expired.
                   {/if}
                 </p>
+                {#if submission.subjectiveMax > 0}
+                  <p class="text-xs text-muted-foreground">
+                    Pending subjective points: {submission.subjectiveMax} across {submission.pendingSubjectiveCount}
+                    {submission.pendingSubjectiveCount === 1 ? "question" : "questions"}.
+                  </p>
+                {/if}
               </div>
               <div class="ml-auto flex flex-wrap items-center gap-2">
                 <Button size="sm" on:click={exportCsv}>Export results CSV</Button>
+                <Button size="sm" variant="outline" on:click={exportJsonSummary}>
+                  Export JSON summary
+                </Button>
                 <Button size="sm" variant="outline" on:click={exportAssessment}>Download assessment JSON</Button>
                 <Button size="sm" variant="ghost" on:click={resetAssessment}>Retake quiz</Button>
               </div>
@@ -769,7 +958,10 @@ function setOrderingTouched(questionId: string, value: boolean) {
                         </span>
                         {#if currentResult}
                           <span class="block text-xs text-muted-foreground">
-                            {currentResult.isCorrect && currentResult.question.id === singleQuestion.id && option.id === singleQuestion.correct
+                            {currentResult.question.id === singleQuestion.id &&
+                            !currentResult.requiresManualGrading &&
+                            currentResult.status === "correct" &&
+                            option.id === singleQuestion.correct
                               ? "Correct answer"
                               : option.explanation}
                           </span>
@@ -818,6 +1010,33 @@ function setOrderingTouched(questionId: string, value: boolean) {
                     value={answers[currentQuestion.id] as string}
                     on:input={(event) => updateTouched(currentQuestion, (event.target as HTMLTextAreaElement).value)}
                   ></textarea>
+                {:else if currentQuestion.type === "subjective"}
+                  {@const subjectiveQuestion = currentQuestion as SubjectiveQuestion}
+                  <div class="space-y-3">
+                    <textarea
+                      class="min-h-[160px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Write your response"
+                      value={answers[currentQuestion.id] as string}
+                      on:input={(event) => updateTouched(currentQuestion, (event.target as HTMLTextAreaElement).value)}
+                    ></textarea>
+                    <div class="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
+                      <p class="mb-2 font-semibold uppercase tracking-wide text-muted-foreground">
+                        Rubrics
+                      </p>
+                      <ul class="ml-4 list-disc space-y-1">
+                        {#each subjectiveQuestion.rubrics as rubric}
+                          <li>
+                            <span class="font-medium text-foreground">
+                              {@html renderWithKatex(rubric.title)}
+                            </span>
+                            <span class="ml-1 text-muted-foreground">
+                              {@html renderWithKatex(rubric.description)}
+                            </span>
+                          </li>
+                        {/each}
+                      </ul>
+                    </div>
+                  </div>
                 {:else if currentQuestion.type === "numeric"}
                   <input
                     type="number"
@@ -914,11 +1133,19 @@ function setOrderingTouched(questionId: string, value: boolean) {
   <Dialog open={showResultDialog} title="Quiz summary" on:close={() => (showResultDialog = false)}>
     <div class="space-y-3 text-sm">
       <p>
-        <span class="font-semibold">Score:</span>
+        <span class="font-semibold">Deterministic score:</span>
         {" "}
-        {submission.totalScore} / {submission.maxScore}
-        {" "}({submission.percentage.toFixed(2)}%)
+        {submission.deterministicEarned} / {submission.deterministicMax}
+        {" "}({submission.deterministicPercentage.toFixed(2)}%)
       </p>
+      {#if submission.subjectiveMax > 0}
+        <p>
+          <span class="font-semibold">Pending subjective:</span>
+          {" "}
+          {submission.subjectiveMax} points across {submission.pendingSubjectiveCount}
+          {submission.pendingSubjectiveCount === 1 ? "question" : "questions"}.
+        </p>
+      {/if}
       <p>
         <span class="font-semibold">Started:</span> {formatter.format(submission.startedAt)}
         <br />
@@ -937,13 +1164,26 @@ function setOrderingTouched(questionId: string, value: boolean) {
             <tr class="border-b">
               <th class="w-12 py-2">#</th>
               <th class="py-2">Question</th>
-              <th class="w-24 py-2">Your answer</th>
-              <th class="w-24 py-2">Correct answer</th>
-              <th class="w-16 py-2 text-center">Score</th>
+              <th class="w-28 py-2">Your answer</th>
+              <th class="w-28 py-2">Reference</th>
+              <th class="w-20 py-2 text-center">Earned</th>
+              <th class="w-24 py-2 text-center">Status</th>
             </tr>
           </thead>
           <tbody>
             {#each submission.results as result, index}
+              {@const statusClass =
+                result.status === "correct"
+                  ? "text-green-600 dark:text-green-300"
+                  : result.status === "incorrect"
+                    ? "text-destructive"
+                    : "text-muted-foreground"}
+              {@const statusLabel =
+                result.status === "pending"
+                  ? "Pending review"
+                  : result.status === "correct"
+                    ? "Correct"
+                    : "Incorrect"}
               <tr class="border-b align-top">
                 <td class="py-2">{index + 1}</td>
                 <td class="py-2">
@@ -951,9 +1191,39 @@ function setOrderingTouched(questionId: string, value: boolean) {
                     {@html renderWithKatex(result.question.text)}
                   </div>
                   {#if result.feedback}
-                    <p class={`mt-1 text-xs ${result.isCorrect ? "text-green-600" : "text-destructive"}`}>
-                      {result.feedback}
+                    <p class={`mt-1 text-xs ${statusClass}`}>
+                      {@html renderWithKatex(result.feedback)}
                     </p>
+                  {/if}
+                  {#if result.requiresManualGrading}
+                    <div class="mt-2 space-y-2">
+                      <div class="rounded-md border border-dashed bg-muted/30 p-2 text-[0.7rem] text-muted-foreground">
+                        <p class="mb-1 font-semibold uppercase tracking-wide">Rubrics</p>
+                        <ul class="ml-4 list-disc space-y-1">
+                          {#each result.rubrics as rubric}
+                            <li>
+                              <span class="font-medium text-foreground">
+                                {@html renderWithKatex(rubric.title)}
+                              </span>
+                              <span class="ml-1">
+                                {@html renderWithKatex(rubric.description)}
+                              </span>
+                            </li>
+                          {/each}
+                        </ul>
+                      </div>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <Button size="sm" variant="outline" on:click={() => copySubjectivePrompt(result)}>
+                          Copy LLM prompt
+                        </Button>
+                        {#if copiedPromptQuestionId === result.question.id && !promptCopyError}
+                          <span class="text-xs text-muted-foreground">Copied!</span>
+                        {/if}
+                        {#if copiedPromptQuestionId === result.question.id && promptCopyError}
+                          <span class="text-xs text-destructive">{promptCopyError}</span>
+                        {/if}
+                      </div>
+                    </div>
                   {/if}
                 </td>
                 <td class="py-2 text-xs">
@@ -963,7 +1233,12 @@ function setOrderingTouched(questionId: string, value: boolean) {
                   <div>{@html renderWithKatex(result.correctAnswer || "—")}</div>
                 </td>
                 <td class="py-2 text-center font-semibold">
-                  {result.isCorrect ? result.max : 0}
+                  {result.requiresManualGrading
+                    ? `— / ${result.max}`
+                    : `${result.earned} / ${result.max}`}
+                </td>
+                <td class={`py-2 text-center text-xs font-semibold ${statusClass}`}>
+                  {statusLabel}
                 </td>
               </tr>
             {/each}

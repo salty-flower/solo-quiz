@@ -75,6 +75,30 @@
       "correctOrder": ["Mercury", "Venus", "Earth", "Mars"],
       "weight": 1,
       "tags": ["astronomy"]
+    },
+    {
+      "id": "q6",
+      "type": "subjective",
+      "text": "In two to three sentences, explain why conservation of energy is useful when solving mechanics problems.",
+      "rubrics": [
+        {
+          "title": "States the principle",
+          "description": "Mentions that the total energy of an isolated system remains constant or that energy cannot be created or destroyed."
+        },
+        {
+          "title": "Connects to problem solving",
+          "description": "Explains how the principle simplifies calculations or reduces the number of unknowns in mechanics scenarios."
+        },
+        {
+          "title": "Clarity",
+          "description": "Provides a coherent explanation that is understandable to another student."
+        }
+      ],
+      "weight": 3,
+      "tags": ["physics", "reasoning"],
+      "feedback": {
+        "incorrect": "A human or LLM grader should review this response using the provided rubrics."
+      }
     }
   ]
 }
