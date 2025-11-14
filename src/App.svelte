@@ -15,6 +15,7 @@ import Dialog from "./lib/components/ui/Dialog.svelte";
 import Alert from "./lib/components/ui/Alert.svelte";
 import { renderWithKatex } from "./lib/katex";
 import {
+  llmFeedbackSchema,
   parseAssessment,
   questionWeight,
   type Assessment,
@@ -25,6 +26,7 @@ import {
   type OrderingQuestion,
   type SingleQuestion,
   type SubjectiveQuestion,
+  type LlmFeedback,
 } from "./lib/schema";
 import {
   clearRecentFiles,
@@ -115,6 +117,9 @@ let orderingTouched = new Set<string>();
 let copiedPromptQuestionId: string | null = null;
 let promptCopyError: string | null = null;
 let promptCopyTimeout: number | null = null;
+let llmFeedbackInputs: Record<string, string> = {};
+let llmFeedbackResults: Record<string, LlmFeedback | undefined> = {};
+let llmFeedbackErrors: Record<string, string | null> = {};
 
 const SYSTEM_PREFERS_DARK = () =>
   typeof window !== "undefined" &&
@@ -198,6 +203,9 @@ function resetState(data: Assessment, sourceName?: string) {
     window.clearTimeout(promptCopyTimeout);
     promptCopyTimeout = null;
   }
+  llmFeedbackInputs = {};
+  llmFeedbackResults = {};
+  llmFeedbackErrors = {};
   for (const question of questions) {
     if (question.type === "multi" || question.type === "ordering") {
       answers[question.id] = [
@@ -212,6 +220,7 @@ function resetState(data: Assessment, sourceName?: string) {
   parseErrors = [];
   submitted = false;
   submission = null;
+  showResultDialog = false;
   startedAt = new Date();
   elapsedSec = 0;
   timeLimitSec = data.meta.timeLimitSec ?? null;
@@ -334,6 +343,32 @@ function isAnswered(
 
 function arraysEqual(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((val, index) => val === b[index]);
+}
+
+function questionNavStyles(question: Question, index: number): string {
+  if (index === currentIndex) {
+    return "border-primary bg-primary/10 text-primary";
+  }
+
+  if (submission) {
+    const result = submission.results[index];
+    if (!result) {
+      return "border-border";
+    }
+    if (result.status === "correct") {
+      return "border-green-500/60 bg-green-500/10 text-green-700 dark:text-green-300";
+    }
+    if (result.status === "incorrect") {
+      return "border-destructive/60 bg-destructive/10 text-destructive";
+    }
+    return "border-muted-foreground/40 bg-muted/10 text-muted-foreground";
+  }
+
+  if (touchedQuestions.has(question.id)) {
+    return "border-primary bg-primary/10 text-primary";
+  }
+
+  return "border-border";
 }
 
 async function navigateTo(index: number) {
@@ -492,6 +527,9 @@ function submitQuiz(auto = false) {
     window.clearInterval(timerId);
     timerId = null;
   }
+  llmFeedbackInputs = {};
+  llmFeedbackResults = {};
+  llmFeedbackErrors = {};
   const completedAt = new Date();
   const results = questions.map((question) =>
     checkQuestion(question, answers[question.id]),
@@ -695,6 +733,38 @@ async function copySubjectivePrompt(result: QuestionResult) {
   }, 3000);
 }
 
+function setLlmFeedbackInput(questionId: string, value: string) {
+  llmFeedbackInputs = { ...llmFeedbackInputs, [questionId]: value };
+}
+
+function applyLlmFeedback(result: QuestionResult) {
+  if (!result.requiresManualGrading) return;
+  const questionId = result.question.id;
+  const raw = llmFeedbackInputs[questionId]?.trim();
+  if (!raw) {
+    llmFeedbackErrors = { ...llmFeedbackErrors, [questionId]: "Paste the JSON feedback before applying." };
+    llmFeedbackResults = { ...llmFeedbackResults, [questionId]: undefined };
+    return;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    const feedback = llmFeedbackSchema.parse(parsed) as LlmFeedback;
+    llmFeedbackResults = { ...llmFeedbackResults, [questionId]: feedback };
+    llmFeedbackErrors = { ...llmFeedbackErrors, [questionId]: null };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to parse feedback. Ensure valid JSON.";
+    llmFeedbackErrors = { ...llmFeedbackErrors, [questionId]: message };
+    llmFeedbackResults = { ...llmFeedbackResults, [questionId]: undefined };
+  }
+}
+
+function clearLlmFeedback(questionId: string) {
+  llmFeedbackInputs = { ...llmFeedbackInputs, [questionId]: "" };
+  llmFeedbackResults = { ...llmFeedbackResults, [questionId]: undefined };
+  llmFeedbackErrors = { ...llmFeedbackErrors, [questionId]: null };
+}
+
 function moveOrdering(
   question: OrderingQuestion,
   index: number,
@@ -835,13 +905,10 @@ function setOrderingTouched(questionId: string, value: boolean) {
               {#each questions as question, index}
                 <button
                   type="button"
-                  class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                    index === currentIndex
-                      ? "border-primary bg-primary/10 text-primary"
-                      : touchedQuestions.has(question.id)
-                        ? "border-green-500/60 bg-green-500/10 text-green-700 dark:text-green-300"
-                        : "border-border"
-                  }`}
+                  class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${questionNavStyles(
+                    question,
+                    index,
+                  )}`}
                   on:click={() => navigateTo(index)}
                 >
                   {index + 1}
@@ -909,6 +976,9 @@ function setOrderingTouched(questionId: string, value: boolean) {
                 {/if}
               </div>
               <div class="ml-auto flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="outline" on:click={() => (showResultDialog = true)}>
+                  View summary
+                </Button>
                 <Button size="sm" on:click={exportCsv}>Export results CSV</Button>
                 <Button size="sm" variant="outline" on:click={exportJsonSummary}>
                   Export JSON summary
@@ -1023,18 +1093,24 @@ function setOrderingTouched(questionId: string, value: boolean) {
                       <p class="mb-2 font-semibold uppercase tracking-wide text-muted-foreground">
                         Rubrics
                       </p>
-                      <ul class="ml-4 list-disc space-y-1">
-                        {#each subjectiveQuestion.rubrics as rubric}
-                          <li>
-                            <span class="font-medium text-foreground">
-                              {@html renderWithKatex(rubric.title)}
-                            </span>
-                            <span class="ml-1 text-muted-foreground">
-                              {@html renderWithKatex(rubric.description)}
-                            </span>
-                          </li>
-                        {/each}
-                      </ul>
+                      {#if currentResult && currentResult.requiresManualGrading}
+                        <ul class="ml-4 list-disc space-y-1">
+                          {#each currentResult.rubrics as rubric}
+                            <li>
+                              <span class="font-medium text-foreground">
+                                {@html renderWithKatex(rubric.title)}
+                              </span>
+                              <span class="ml-1 text-muted-foreground">
+                                {@html renderWithKatex(rubric.description)}
+                              </span>
+                            </li>
+                          {/each}
+                        </ul>
+                      {:else}
+                        <p class="ml-1 text-muted-foreground">
+                          Rubrics will be available when reviewing your submission.
+                        </p>
+                      {/if}
                     </div>
                   </div>
                 {:else if currentQuestion.type === "numeric"}
@@ -1196,7 +1272,11 @@ function setOrderingTouched(questionId: string, value: boolean) {
                     </p>
                   {/if}
                   {#if result.requiresManualGrading}
-                    <div class="mt-2 space-y-2">
+                    {@const questionId = result.question.id}
+                    {@const feedbackInput = llmFeedbackInputs[questionId] ?? ""}
+                    {@const feedbackError = llmFeedbackErrors[questionId]}
+                    {@const feedback = llmFeedbackResults[questionId]}
+                    <div class="mt-2 space-y-3">
                       <div class="rounded-md border border-dashed bg-muted/30 p-2 text-[0.7rem] text-muted-foreground">
                         <p class="mb-1 font-semibold uppercase tracking-wide">Rubrics</p>
                         <ul class="ml-4 list-disc space-y-1">
@@ -1216,11 +1296,78 @@ function setOrderingTouched(questionId: string, value: boolean) {
                         <Button size="sm" variant="outline" on:click={() => copySubjectivePrompt(result)}>
                           Copy LLM prompt
                         </Button>
-                        {#if copiedPromptQuestionId === result.question.id && !promptCopyError}
+                        {#if copiedPromptQuestionId === questionId && !promptCopyError}
                           <span class="text-xs text-muted-foreground">Copied!</span>
                         {/if}
-                        {#if copiedPromptQuestionId === result.question.id && promptCopyError}
+                        {#if copiedPromptQuestionId === questionId && promptCopyError}
                           <span class="text-xs text-destructive">{promptCopyError}</span>
+                        {/if}
+                      </div>
+                      <div class="space-y-2 rounded-md border border-dashed bg-muted/20 p-3">
+                        <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Paste LLM feedback JSON
+                        </p>
+                        <textarea
+                          class="h-24 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-[0.75rem] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          placeholder="Paste the model's JSON response here"
+                          value={feedbackInput}
+                          on:input={(event) =>
+                            setLlmFeedbackInput(
+                              questionId,
+                              (event.target as HTMLTextAreaElement).value,
+                            )}
+                        ></textarea>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <Button size="sm" on:click={() => applyLlmFeedback(result)}>
+                            Apply feedback
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            on:click={() => clearLlmFeedback(questionId)}
+                            disabled={!feedbackInput.trim() && !feedback && !feedbackError}
+                          >
+                            Clear
+                          </Button>
+                        </div>
+                        {#if feedbackError}
+                          <p class="text-[0.7rem] text-destructive">{feedbackError}</p>
+                        {:else if feedback}
+                          <div class="space-y-2 rounded-md border border-muted bg-background/70 p-2 text-[0.7rem]">
+                            <p>
+                              <span class="font-semibold">Verdict:</span> {feedback.verdict}
+                              <span class="ml-2 font-semibold">Score:</span>
+                              {feedback.score} / {feedback.maxScore}
+                            </p>
+                            <p>
+                              <span class="font-semibold">Feedback:</span>
+                              {" "}{feedback.feedback}
+                            </p>
+                            <div>
+                              <p class="font-semibold">Rubric breakdown:</p>
+                              <ul class="ml-4 list-disc space-y-1">
+                                {#each feedback.rubricBreakdown as entry}
+                                  <li>
+                                    <span class="font-medium">{entry.rubric}:</span>
+                                    {" "}{entry.comments}
+                                    <span class="ml-1 text-muted-foreground">
+                                      ({Math.round(entry.achievedFraction * 100)}%)
+                                    </span>
+                                  </li>
+                                {/each}
+                              </ul>
+                            </div>
+                            {#if feedback.improvements.length > 0}
+                              <div>
+                                <p class="font-semibold">Suggested improvements:</p>
+                                <ul class="ml-4 list-disc space-y-1">
+                                  {#each feedback.improvements as improvement}
+                                    <li>{improvement}</li>
+                                  {/each}
+                                </ul>
+                              </div>
+                            {/if}
+                          </div>
                         {/if}
                       </div>
                     </div>
