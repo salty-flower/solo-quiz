@@ -161,3 +161,9 @@ export function parseAssessment(raw: unknown):
 export function questionWeight(question: Question): number {
   return question.weight ?? 1;
 }
+
+export function isSubjectiveQuestion(
+  question: Question | undefined,
+): question is SubjectiveQuestion {
+  return question?.type === "subjective";
+}

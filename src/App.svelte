@@ -25,6 +25,7 @@ import {
   type OrderingQuestion,
   type SingleQuestion,
   type SubjectiveQuestion,
+  isSubjectiveQuestion,
 } from "./lib/schema";
 import {
   clearRecentFiles,
@@ -32,57 +33,22 @@ import {
   touchRecentFile,
   type RecentFileEntry,
 } from "./lib/storage";
+import { buildCsv, downloadCsv } from "./lib/csv";
 import {
-  buildCsv,
-  downloadCsv,
-  type CsvQuestionResult,
-  type CsvSummary,
-} from "./lib/csv";
+  buildCsvSummary,
+  computeSubmissionSummary,
+  createCsvRows,
+  createJsonSummary,
+  type GradingMode,
+  type QuestionResult,
+  type SubmissionSummary,
+  type SubjectiveEvaluation,
+} from "./lib/summary";
 
 const formatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "short",
   timeStyle: "short",
 });
-
-type GradingMode = "auto" | "subjective";
-
-interface SubjectiveEvaluation {
-  status: "pending" | "scored" | "error";
-  rubric: string;
-  maxScore: number;
-  awardedScore?: number;
-  reasoning?: string;
-  referenceAnswer?: string;
-  evaluatorModel?: string;
-}
-
-interface QuestionResult {
-  questionNumber: number;
-  question: Question;
-  earned: number;
-  max: number;
-  isCorrect: boolean;
-  userAnswer: string;
-  correctAnswer: string;
-  feedback?: string;
-  gradingMode: GradingMode;
-  evaluation?: SubjectiveEvaluation;
-}
-
-interface SubmissionSummary {
-  results: QuestionResult[];
-  autoScore: number;
-  autoMaxScore: number;
-  autoPercentage: number;
-  subjectiveMaxScore: number;
-  totalMaxScore: number;
-  subjectivePending: number;
-  startedAt: Date;
-  completedAt: Date;
-  elapsedSec: number;
-  autoSubmitted: boolean;
-}
-
 type AnswerValue = string | string[] | null;
 
 let fileInput: HTMLInputElement | null = null;
@@ -363,12 +329,6 @@ function normalizeFitbAnswer(question: FitbQuestion, value: string): string {
   return value;
 }
 
-function isSubjectiveQuestion(
-  question: Question | undefined,
-): question is SubjectiveQuestion {
-  return question?.type === "subjective";
-}
-
 function checkQuestion(
   question: Question,
   value: AnswerValue,
@@ -513,40 +473,13 @@ function submitQuiz(auto = false) {
     const result = checkQuestion(question, answers[question.id]);
     return { ...result, questionNumber: index + 1 } satisfies QuestionResult;
   });
-  const autoScore = results
-    .filter((result) => result.gradingMode === "auto")
-    .reduce((sum, result) => sum + result.earned, 0);
-  const autoMaxScore = results
-    .filter((result) => result.gradingMode === "auto")
-    .reduce((sum, result) => sum + result.max, 0);
-  const subjectiveMaxScore = results
-    .filter((result) => result.gradingMode === "subjective")
-    .reduce((sum, result) => sum + result.max, 0);
-  const autoPercentage =
-    autoMaxScore === 0 ? 0 : (autoScore / autoMaxScore) * 100;
-  const totalMaxScore = autoMaxScore + subjectiveMaxScore;
-  const subjectivePending = results.filter(
-    (result) => result.gradingMode === "subjective",
-  ).length;
-  const elapsed = startedAt
-    ? Math.max(
-        0,
-        Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000),
-      )
-    : elapsedSec;
-  submission = {
+  submission = computeSubmissionSummary({
     results,
-    autoScore,
-    autoMaxScore,
-    autoPercentage,
-    subjectiveMaxScore,
-    totalMaxScore,
-    subjectivePending,
-    startedAt: startedAt ?? new Date(),
+    startedAt,
     completedAt,
-    elapsedSec: elapsed,
+    elapsedFallbackSec: elapsedSec,
     autoSubmitted: auto,
-  };
+  });
   showResultDialog = true;
 }
 
@@ -557,86 +490,15 @@ function resetAssessment() {
 
 function exportCsv() {
   if (!assessment || !submission) return;
-  const rows: CsvQuestionResult[] = submission.results.map((result) => ({
-    questionNumber: result.questionNumber,
-    questionId: result.question.id,
-    questionText: result.question.text,
-    type: result.question.type,
-    weight: questionWeight(result.question),
-    tags: result.question.tags ?? [],
-    userAnswer: result.userAnswer,
-    correctAnswer: result.correctAnswer,
-    gradingMode: result.gradingMode,
-    isCorrect: result.gradingMode === "auto" ? result.isCorrect : null,
-    earned: result.earned,
-    evaluationStatus: result.evaluation?.status,
-    evaluationNotes: result.evaluation?.reasoning,
-  }));
-  const summary: CsvSummary = {
-    assessmentTitle: assessment.meta.title,
-    autoScore: submission.autoScore,
-    autoMaxScore: submission.autoMaxScore,
-    autoPercentage: submission.autoPercentage,
-    subjectiveMaxScore: submission.subjectiveMaxScore,
-    startedAt: submission.startedAt,
-    completedAt: submission.completedAt,
-    timeElapsedSec: submission.elapsedSec,
-  };
+  const rows = createCsvRows(submission.results);
+  const summary = buildCsvSummary(assessment.meta.title, submission);
   const csv = buildCsv(summary, rows);
   downloadCsv(`${sanitizeFilename(assessment.meta.title)}-results.csv`, csv);
 }
 
 function exportSummaryJson() {
   if (!assessment || !submission) return;
-  const payload = {
-    assessment: {
-      title: assessment.meta.title,
-      description: assessment.meta.description,
-      shuffleQuestions: assessment.meta.shuffleQuestions ?? false,
-      timeLimitSec: assessment.meta.timeLimitSec ?? null,
-      totalQuestions: assessment.questions.length,
-    },
-    startedAt: submission.startedAt.toISOString(),
-    completedAt: submission.completedAt.toISOString(),
-    elapsedSec: submission.elapsedSec,
-    autoScore: submission.autoScore,
-    autoMaxScore: submission.autoMaxScore,
-    autoPercentage: submission.autoPercentage,
-    subjectiveMaxScore: submission.subjectiveMaxScore,
-    totalMaxScore: submission.totalMaxScore,
-    subjectivePending: submission.subjectivePending,
-    results: submission.results.map((result) => {
-      const base = {
-        questionNumber: result.questionNumber,
-        questionId: result.question.id,
-        questionText: result.question.text,
-        type: result.question.type,
-        gradingMode: result.gradingMode,
-        weight: questionWeight(result.question),
-        tags: result.question.tags ?? [],
-        userAnswer: result.userAnswer,
-        correctAnswer: result.correctAnswer,
-        earned: result.earned,
-        isCorrect: result.gradingMode === "auto" ? result.isCorrect : undefined,
-        feedback: result.feedback,
-        evaluation: result.evaluation,
-      };
-      if (
-        result.gradingMode === "subjective" &&
-        isSubjectiveQuestion(result.question)
-      ) {
-        const subjective = result.question;
-        return {
-          ...base,
-          rubric: subjective.llmGrading.rubric,
-          referenceAnswer: subjective.llmGrading.referenceAnswer,
-          additionalContext: subjective.llmGrading.additionalContext,
-          evaluatorModel: subjective.llmGrading.evaluatorModel,
-        };
-      }
-      return base;
-    }),
-  };
+  const payload = createJsonSummary(assessment, submission);
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: "application/json;charset=utf-8",
   });

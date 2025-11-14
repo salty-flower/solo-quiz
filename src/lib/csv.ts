@@ -1,29 +1,6 @@
-export interface CsvSummary {
-  assessmentTitle: string;
-  autoScore: number;
-  autoMaxScore: number;
-  autoPercentage: number;
-  subjectiveMaxScore: number;
-  startedAt: Date;
-  completedAt: Date;
-  timeElapsedSec: number;
-}
+import type { CsvQuestionResult, CsvSummary } from "./summary";
 
-export interface CsvQuestionResult {
-  questionNumber: number;
-  questionId: string;
-  questionText: string;
-  type: string;
-  weight: number;
-  tags: string[];
-  userAnswer: string;
-  correctAnswer: string;
-  gradingMode: "auto" | "subjective";
-  isCorrect: boolean | null;
-  earned: number;
-  evaluationStatus?: string;
-  evaluationNotes?: string;
-}
+export type { CsvQuestionResult, CsvSummary } from "./summary";
 
 function escapeCsv(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
