@@ -742,7 +742,10 @@ function applyLlmFeedback(result: QuestionResult) {
   const questionId = result.question.id;
   const raw = llmFeedbackInputs[questionId]?.trim();
   if (!raw) {
-    llmFeedbackErrors = { ...llmFeedbackErrors, [questionId]: "Paste the JSON feedback before applying." };
+    llmFeedbackErrors = {
+      ...llmFeedbackErrors,
+      [questionId]: "Paste the JSON feedback before applying.",
+    };
     llmFeedbackResults = { ...llmFeedbackResults, [questionId]: undefined };
     return;
   }
@@ -753,7 +756,9 @@ function applyLlmFeedback(result: QuestionResult) {
     llmFeedbackErrors = { ...llmFeedbackErrors, [questionId]: null };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to parse feedback. Ensure valid JSON.";
+      error instanceof Error
+        ? error.message
+        : "Unable to parse feedback. Ensure valid JSON.";
     llmFeedbackErrors = { ...llmFeedbackErrors, [questionId]: message };
     llmFeedbackResults = { ...llmFeedbackResults, [questionId]: undefined };
   }
