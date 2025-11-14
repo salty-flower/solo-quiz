@@ -20,8 +20,9 @@ export function buildCsv(
     "Your Answer",
     "Correct Answer",
     "Grading Mode",
-    "Correct?",
-    "Awarded Score",
+    "Earned",
+    "Max",
+    "Status",
     "Evaluation Status",
     "Evaluation Notes",
   ];
@@ -39,8 +40,9 @@ export function buildCsv(
         row.userAnswer,
         row.correctAnswer,
         row.gradingMode,
-        row.isCorrect === null ? "pending" : row.isCorrect ? "true" : "false",
-        row.earned.toString(),
+        row.earned == null ? "" : row.earned.toString(),
+        row.max.toString(),
+        row.status,
         row.evaluationStatus ?? "",
         row.evaluationNotes ?? "",
       ]
@@ -54,17 +56,27 @@ export function buildCsv(
     [
       "Summary",
       summary.assessmentTitle,
-      "Auto Score",
-      `${summary.autoScore} / ${summary.autoMaxScore}`,
-      "Auto Percentage",
-      `${summary.autoPercentage.toFixed(2)}%`,
-      "Subjective Max Score",
-      summary.subjectiveMaxScore.toString(),
+      "Deterministic Score",
+      `${summary.deterministicScore} / ${summary.deterministicMax}`,
+      "Deterministic %",
+      `${summary.deterministicPercentage.toFixed(2)}%`,
+      "Pending Subjective Max",
+      summary.pendingSubjectiveMax.toString(),
+      "Pending Subjective Count",
+      summary.pendingSubjectiveCount.toString(),
       "Time Elapsed (s)",
       summary.timeElapsedSec.toString(),
       "Completed",
       summary.completedAt.toISOString(),
-      "",
+    ]
+      .map(escapeCsv)
+      .join(","),
+  );
+
+  lines.push(
+    [
+      "Started",
+      summary.startedAt.toISOString(),
     ]
       .map(escapeCsv)
       .join(","),

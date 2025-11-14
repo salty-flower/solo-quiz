@@ -114,6 +114,28 @@ export const llmSubjectiveResultSchema = z.object({
 
 export type LlmSubjectiveResult = z.infer<typeof llmSubjectiveResultSchema>;
 
+export const llmFeedbackSchema = z.object({
+  verdict: z.enum(["correct", "incorrect", "partial"]),
+  score: z.number().min(0),
+  maxScore: z.number().positive(),
+  feedback: z.string().min(1, "Feedback text is required"),
+  rubricBreakdown: z
+    .array(
+      z.object({
+        rubric: z.string().min(1, "Rubric reference is required"),
+        comments: z.string().min(1, "Provide comments for this rubric"),
+        achievedFraction: z
+          .number()
+          .min(0, "Fraction cannot be negative")
+          .max(1, "Fraction cannot exceed 1"),
+      }),
+    )
+    .default([]),
+  improvements: z.array(z.string().min(1)).default([]),
+});
+
+export type LlmFeedback = z.infer<typeof llmFeedbackSchema>;
+
 const metaSchema = z.object({
   title: z.string().min(1, "Assessment title is required"),
   description: z.string().optional(),

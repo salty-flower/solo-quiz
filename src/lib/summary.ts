@@ -2,10 +2,14 @@ import {
   isSubjectiveQuestion,
   questionWeight,
   type Assessment,
+  type LlmFeedback,
   type Question,
+  type SubjectiveQuestion,
 } from "./schema";
 
 export type GradingMode = "auto" | "subjective";
+
+export type ResultStatus = "correct" | "incorrect" | "pending" | "partial";
 
 export interface SubjectiveEvaluation {
   status: "pending" | "scored" | "error";
@@ -15,29 +19,54 @@ export interface SubjectiveEvaluation {
   reasoning?: string;
   referenceAnswer?: string;
   evaluatorModel?: string;
+  feedback?: string;
+  improvements?: string[];
+  rubricBreakdown?: LlmFeedback["rubricBreakdown"];
+  verdict?: LlmFeedback["verdict"];
+  llmFeedback?: LlmFeedback;
 }
 
-export interface QuestionResult {
+export interface BaseQuestionResult {
   questionNumber: number;
   question: Question;
-  earned: number;
   max: number;
-  isCorrect: boolean;
   userAnswer: string;
   correctAnswer: string;
   feedback?: string;
   gradingMode: GradingMode;
-  evaluation?: SubjectiveEvaluation;
+  status: ResultStatus;
 }
+
+export interface DeterministicQuestionResult extends BaseQuestionResult {
+  requiresManualGrading: false;
+  earned: number;
+  isCorrect: boolean;
+}
+
+export interface SubjectiveQuestionResult extends BaseQuestionResult {
+  question: SubjectiveQuestion;
+  requiresManualGrading: true;
+  earned: number | null;
+  isCorrect: boolean | null;
+  evaluation: SubjectiveEvaluation;
+}
+
+export type QuestionResult =
+  | DeterministicQuestionResult
+  | SubjectiveQuestionResult;
+
+export type QuestionResultDraft =
+  | Omit<DeterministicQuestionResult, "questionNumber">
+  | Omit<SubjectiveQuestionResult, "questionNumber">;
 
 export interface SubmissionSummary {
   results: QuestionResult[];
-  autoScore: number;
-  autoMaxScore: number;
-  autoPercentage: number;
-  subjectiveMaxScore: number;
-  totalMaxScore: number;
-  subjectivePending: number;
+  deterministicEarned: number;
+  deterministicMax: number;
+  deterministicPercentage: number;
+  subjectiveMax: number;
+  pendingSubjectiveMax: number;
+  pendingSubjectiveCount: number;
   startedAt: Date;
   completedAt: Date;
   elapsedSec: number;
@@ -46,10 +75,11 @@ export interface SubmissionSummary {
 
 export interface CsvSummary {
   assessmentTitle: string;
-  autoScore: number;
-  autoMaxScore: number;
-  autoPercentage: number;
-  subjectiveMaxScore: number;
+  deterministicScore: number;
+  deterministicMax: number;
+  deterministicPercentage: number;
+  pendingSubjectiveMax: number;
+  pendingSubjectiveCount: number;
   startedAt: Date;
   completedAt: Date;
   timeElapsedSec: number;
@@ -65,8 +95,9 @@ export interface CsvQuestionResult {
   userAnswer: string;
   correctAnswer: string;
   gradingMode: GradingMode;
-  isCorrect: boolean | null;
-  earned: number;
+  earned: number | null;
+  max: number;
+  status: ResultStatus;
   evaluationStatus?: string;
   evaluationNotes?: string;
 }
@@ -81,14 +112,13 @@ export interface JsonSummaryQuestion {
   tags: string[];
   userAnswer: string;
   correctAnswer: string;
-  earned: number;
-  isCorrect?: boolean;
+  earned: number | null;
+  max: number;
+  status: ResultStatus;
+  isCorrect?: boolean | null;
   feedback?: string;
   evaluation?: SubjectiveEvaluation;
-  rubric?: string;
-  referenceAnswer?: string;
-  additionalContext?: string;
-  evaluatorModel?: string;
+  llmGrading?: SubjectiveQuestion["llmGrading"];
 }
 
 export interface JsonSummary {
@@ -102,12 +132,12 @@ export interface JsonSummary {
   startedAt: string;
   completedAt: string;
   elapsedSec: number;
-  autoScore: number;
-  autoMaxScore: number;
-  autoPercentage: number;
-  subjectiveMaxScore: number;
-  totalMaxScore: number;
-  subjectivePending: number;
+  deterministicEarned: number;
+  deterministicMax: number;
+  deterministicPercentage: number;
+  subjectiveMax: number;
+  pendingSubjectiveMax: number;
+  pendingSubjectiveCount: number;
   autoSubmitted: boolean;
   results: JsonSummaryQuestion[];
 }
@@ -121,21 +151,37 @@ export function computeSubmissionSummary(options: {
 }): SubmissionSummary {
   const { results, startedAt, completedAt, elapsedFallbackSec, autoSubmitted } =
     options;
-  const autoResults = results.filter((result) => result.gradingMode === "auto");
+
+  const deterministicResults = results.filter(
+    (result): result is DeterministicQuestionResult => !result.requiresManualGrading,
+  );
   const subjectiveResults = results.filter(
-    (result) => result.gradingMode === "subjective",
+    (result): result is SubjectiveQuestionResult => result.requiresManualGrading,
   );
 
-  const autoScore = autoResults.reduce((sum, result) => sum + result.earned, 0);
-  const autoMaxScore = autoResults.reduce((sum, result) => sum + result.max, 0);
-  const subjectiveMaxScore = subjectiveResults.reduce(
+  const deterministicEarned = deterministicResults.reduce(
+    (sum, result) => sum + result.earned,
+    0,
+  );
+  const deterministicMax = deterministicResults.reduce(
     (sum, result) => sum + result.max,
     0,
   );
-  const totalMaxScore = autoMaxScore + subjectiveMaxScore;
-  const autoPercentage =
-    autoMaxScore === 0 ? 0 : (autoScore / autoMaxScore) * 100;
-  const subjectivePending = subjectiveResults.length;
+  const subjectiveMax = subjectiveResults.reduce(
+    (sum, result) => sum + result.max,
+    0,
+  );
+  const pendingSubjectiveMax = subjectiveResults.reduce(
+    (sum, result) => sum + (result.status === "pending" ? result.max : 0),
+    0,
+  );
+  const deterministicPercentage =
+    deterministicMax === 0
+      ? 0
+      : (deterministicEarned / deterministicMax) * 100;
+  const pendingSubjectiveCount = subjectiveResults.filter(
+    (result) => result.status === "pending",
+  ).length;
 
   const elapsedSec =
     startedAt != null
@@ -147,12 +193,12 @@ export function computeSubmissionSummary(options: {
 
   return {
     results,
-    autoScore,
-    autoMaxScore,
-    autoPercentage,
-    subjectiveMaxScore,
-    totalMaxScore,
-    subjectivePending,
+    deterministicEarned,
+    deterministicMax,
+    deterministicPercentage,
+    subjectiveMax,
+    pendingSubjectiveMax,
+    pendingSubjectiveCount,
     startedAt: startedAt ?? completedAt,
     completedAt,
     elapsedSec,
@@ -166,10 +212,11 @@ export function buildCsvSummary(
 ): CsvSummary {
   return {
     assessmentTitle,
-    autoScore: submission.autoScore,
-    autoMaxScore: submission.autoMaxScore,
-    autoPercentage: submission.autoPercentage,
-    subjectiveMaxScore: submission.subjectiveMaxScore,
+    deterministicScore: submission.deterministicEarned,
+    deterministicMax: submission.deterministicMax,
+    deterministicPercentage: submission.deterministicPercentage,
+    pendingSubjectiveMax: submission.pendingSubjectiveMax,
+    pendingSubjectiveCount: submission.pendingSubjectiveCount,
     startedAt: submission.startedAt,
     completedAt: submission.completedAt,
     timeElapsedSec: submission.elapsedSec,
@@ -187,10 +234,15 @@ export function createCsvRows(results: QuestionResult[]): CsvQuestionResult[] {
     userAnswer: result.userAnswer,
     correctAnswer: result.correctAnswer,
     gradingMode: result.gradingMode,
-    isCorrect: result.gradingMode === "auto" ? result.isCorrect : null,
     earned: result.earned,
-    evaluationStatus: result.evaluation?.status,
-    evaluationNotes: result.evaluation?.reasoning,
+    max: result.max,
+    status: result.status,
+    evaluationStatus:
+      result.requiresManualGrading ? result.evaluation.status : undefined,
+    evaluationNotes:
+      result.requiresManualGrading
+        ? result.evaluation.reasoning ?? result.evaluation.feedback
+        : undefined,
   }));
 }
 
@@ -198,56 +250,106 @@ export function createJsonSummary(
   assessment: Assessment,
   submission: SubmissionSummary,
 ): JsonSummary {
-  const questions = submission.results.map<JsonSummaryQuestion>((result) => {
-    const base: JsonSummaryQuestion = {
-      questionNumber: result.questionNumber,
-      questionId: result.question.id,
-      questionText: result.question.text,
-      type: result.question.type,
-      gradingMode: result.gradingMode,
-      weight: questionWeight(result.question),
-      tags: result.question.tags ?? [],
-      userAnswer: result.userAnswer,
-      correctAnswer: result.correctAnswer,
-      earned: result.earned,
-      isCorrect:
-        result.gradingMode === "auto" ? result.isCorrect : undefined,
-      feedback: result.feedback,
-      evaluation: result.evaluation,
-    };
-
-    if (isSubjectiveQuestion(result.question)) {
-      const subjective = result.question;
-      return {
-        ...base,
-        rubric: subjective.llmGrading.rubric,
-        referenceAnswer: subjective.llmGrading.referenceAnswer,
-        additionalContext: subjective.llmGrading.additionalContext,
-        evaluatorModel: subjective.llmGrading.evaluatorModel,
-      };
-    }
-
-    return base;
-  });
-
   return {
     assessment: {
       title: assessment.meta.title,
       description: assessment.meta.description,
-      shuffleQuestions: assessment.meta.shuffleQuestions ?? false,
+      shuffleQuestions: Boolean(assessment.meta.shuffleQuestions),
       timeLimitSec: assessment.meta.timeLimitSec ?? null,
       totalQuestions: assessment.questions.length,
     },
     startedAt: submission.startedAt.toISOString(),
     completedAt: submission.completedAt.toISOString(),
     elapsedSec: submission.elapsedSec,
-    autoScore: submission.autoScore,
-    autoMaxScore: submission.autoMaxScore,
-    autoPercentage: submission.autoPercentage,
-    subjectiveMaxScore: submission.subjectiveMaxScore,
-    totalMaxScore: submission.totalMaxScore,
-    subjectivePending: submission.subjectivePending,
+    deterministicEarned: submission.deterministicEarned,
+    deterministicMax: submission.deterministicMax,
+    deterministicPercentage: submission.deterministicPercentage,
+    subjectiveMax: submission.subjectiveMax,
+    pendingSubjectiveMax: submission.pendingSubjectiveMax,
+    pendingSubjectiveCount: submission.pendingSubjectiveCount,
     autoSubmitted: submission.autoSubmitted,
-    results: questions,
+    results: submission.results.map((result) => {
+      const base: JsonSummaryQuestion = {
+        questionNumber: result.questionNumber,
+        questionId: result.question.id,
+        questionText: result.question.text,
+        type: result.question.type,
+        gradingMode: result.gradingMode,
+        weight: questionWeight(result.question),
+        tags: result.question.tags ?? [],
+        userAnswer: result.userAnswer,
+        correctAnswer: result.correctAnswer,
+        earned: result.earned,
+        max: result.max,
+        status: result.status,
+        isCorrect: result.isCorrect,
+        feedback: result.feedback,
+      };
+
+      if (result.requiresManualGrading && isSubjectiveQuestion(result.question)) {
+        return {
+          ...base,
+          evaluation: result.evaluation,
+          llmGrading: result.question.llmGrading,
+        } satisfies JsonSummaryQuestion;
+      }
+
+      return base;
+    }),
+  };
+}
+
+export function applyLlmFeedbackToResult(
+  result: SubjectiveQuestionResult,
+  feedback: LlmFeedback,
+): SubjectiveQuestionResult {
+  const clampedScore = Math.max(0, Math.min(feedback.score, result.max));
+  const status: ResultStatus =
+    feedback.verdict === "correct"
+      ? "correct"
+      : feedback.verdict === "incorrect"
+        ? "incorrect"
+        : "partial";
+  const isCorrect =
+    status === "correct" ? true : status === "incorrect" ? false : null;
+
+  return {
+    ...result,
+    earned: clampedScore,
+    isCorrect,
+    status,
+    evaluation: {
+      ...result.evaluation,
+      status: "scored",
+      awardedScore: clampedScore,
+      reasoning: feedback.feedback,
+      feedback: feedback.feedback,
+      improvements: feedback.improvements,
+      rubricBreakdown: feedback.rubricBreakdown,
+      verdict: feedback.verdict,
+      llmFeedback: feedback,
+    },
+  };
+}
+
+export function resetSubjectiveResult(
+  result: SubjectiveQuestionResult,
+): SubjectiveQuestionResult {
+  return {
+    ...result,
+    earned: null,
+    isCorrect: null,
+    status: "pending",
+    evaluation: {
+      ...result.evaluation,
+      status: "pending",
+      awardedScore: undefined,
+      reasoning: undefined,
+      feedback: undefined,
+      improvements: undefined,
+      rubricBreakdown: undefined,
+      verdict: undefined,
+      llmFeedback: undefined,
+    },
   };
 }
