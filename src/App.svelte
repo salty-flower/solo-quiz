@@ -20,11 +20,9 @@ import {
   questionWeight,
   type Assessment,
   type Question,
-  type FitbQuestion,
-  type MultiQuestion,
-  type NumericQuestion,
-  type OrderingQuestion,
   type SingleQuestion,
+  type MultiQuestion,
+  type OrderingQuestion,
   type SubjectiveQuestion,
   type LlmFeedback,
 } from "./lib/schema";
@@ -41,55 +39,18 @@ import {
   type CsvSummary,
 } from "./lib/csv";
 import { buildSubjectivePrompt } from "./lib/llm";
+import {
+  createSerializableQuestionResult,
+  evaluateSubmission,
+  type AnswerValue,
+  type QuestionResult,
+  type SubmissionSummary,
+} from "./lib/results";
 
 const formatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "short",
   timeStyle: "short",
 });
-
-type ResultStatus = "correct" | "incorrect" | "pending";
-
-interface BaseQuestionResult {
-  question: Question;
-  max: number;
-  userAnswer: string;
-  correctAnswer: string;
-  feedback?: string;
-  status: ResultStatus;
-}
-
-interface DeterministicQuestionResult extends BaseQuestionResult {
-  requiresManualGrading: false;
-  earned: number;
-  isCorrect: boolean;
-  status: Exclude<ResultStatus, "pending">;
-}
-
-interface SubjectiveQuestionResult extends BaseQuestionResult {
-  question: SubjectiveQuestion;
-  requiresManualGrading: true;
-  earned: null;
-  isCorrect: null;
-  status: "pending";
-  rubrics: SubjectiveQuestion["rubrics"];
-}
-
-type QuestionResult = DeterministicQuestionResult | SubjectiveQuestionResult;
-
-interface SubmissionSummary {
-  results: QuestionResult[];
-  deterministicEarned: number;
-  deterministicMax: number;
-  deterministicPercentage: number;
-  subjectiveMax: number;
-  pendingSubjectiveCount: number;
-  startedAt: Date;
-  completedAt: Date;
-  elapsedSec: number;
-  autoSubmitted: boolean;
-}
-
-type AnswerValue = string | string[] | null;
 
 let fileInput: HTMLInputElement | null = null;
 let dropActive = false;
@@ -378,148 +339,6 @@ async function navigateTo(index: number) {
   questionContainer?.focus();
 }
 
-function normalizeFitbAnswer(question: FitbQuestion, value: string): string {
-  const mode = question.normalize ?? "trim";
-  if (mode === "trim") {
-    return value.trim();
-  }
-  if (mode === "lower") {
-    return value.trim().toLowerCase();
-  }
-  return value;
-}
-
-function checkQuestion(question: Question, value: AnswerValue): QuestionResult {
-  const max = questionWeight(question);
-  let userAnswer = "";
-  let correctAnswer = "";
-
-  if (question.type === "subjective") {
-    const subjective = question as SubjectiveQuestion;
-    userAnswer = typeof value === "string" ? value : "";
-    return {
-      question: subjective,
-      requiresManualGrading: true,
-      earned: null,
-      isCorrect: null,
-      status: "pending",
-      max,
-      userAnswer,
-      correctAnswer: "",
-      feedback: subjective.feedback?.incorrect ?? subjective.feedback?.correct,
-      rubrics: subjective.rubrics,
-    };
-  }
-
-  let isCorrect = false;
-  let earned = 0;
-
-  switch (question.type) {
-    case "single": {
-      const single = question as SingleQuestion;
-      const selected = typeof value === "string" ? value : "";
-      userAnswer = renderOptionLabels(single, selected ? [selected] : []);
-      correctAnswer = renderOptionLabels(single, [single.correct]);
-      isCorrect = selected === single.correct;
-      break;
-    }
-    case "multi": {
-      const multi = question as MultiQuestion;
-      const selected = Array.isArray(value) ? (value as string[]) : [];
-      userAnswer = renderOptionLabels(multi, selected);
-      correctAnswer = renderOptionLabels(multi, multi.correct);
-      const normalizedSelected = [...selected].sort();
-      const normalizedCorrect = [...multi.correct].sort();
-      isCorrect = arraysEqual(normalizedSelected, normalizedCorrect);
-      break;
-    }
-    case "fitb": {
-      const fitb = question as FitbQuestion;
-      const text = typeof value === "string" ? value : "";
-      userAnswer = text;
-      const normalized = normalizeFitbAnswer(fitb, text);
-      isCorrect = fitb.accept.some((entry) => {
-        if (typeof entry === "string") {
-          return normalizeFitbAnswer(fitb, entry) === normalized;
-        }
-        try {
-          const regex = new RegExp(entry.pattern, entry.flags);
-          return regex.test(text);
-        } catch (error) {
-          console.warn("Invalid FITB regex", error);
-          return false;
-        }
-      });
-      correctAnswer = fitb.accept
-        .map((entry) =>
-          typeof entry === "string"
-            ? entry
-            : `/${entry.pattern}/${entry.flags ?? ""}`,
-        )
-        .join(", ");
-      break;
-    }
-    case "numeric": {
-      const numeric = question as NumericQuestion;
-      const text = typeof value === "string" ? value.trim() : "";
-      userAnswer = text;
-      const parsed = Number.parseFloat(text);
-      if (!Number.isNaN(parsed)) {
-        const tolerance = numeric.tolerance ?? 0;
-        isCorrect = Math.abs(parsed - numeric.correct) <= tolerance;
-      } else {
-        isCorrect = false;
-      }
-      correctAnswer = numeric.tolerance
-        ? `${numeric.correct} ± ${numeric.tolerance}`
-        : numeric.correct.toString();
-      break;
-    }
-    case "ordering": {
-      const ordering = question as OrderingQuestion;
-      const sequence = Array.isArray(value)
-        ? (value as string[])
-        : ordering.items;
-      userAnswer = sequence.join(" → ");
-      correctAnswer = ordering.correctOrder.join(" → ");
-      isCorrect = arraysEqual(sequence, ordering.correctOrder);
-      break;
-    }
-    default:
-      isCorrect = false;
-  }
-
-  if (isCorrect) {
-    earned = max;
-  }
-
-  const feedback = isCorrect
-    ? question.feedback?.correct
-    : question.feedback?.incorrect;
-
-  return {
-    question,
-    requiresManualGrading: false,
-    earned,
-    max,
-    isCorrect,
-    status: isCorrect ? "correct" : "incorrect",
-    userAnswer,
-    correctAnswer,
-    feedback,
-  };
-}
-
-function renderOptionLabels(
-  question: SingleQuestion | MultiQuestion,
-  ids: string[],
-): string {
-  const map = new Map(
-    question.options.map((option) => [option.id, option.label] as const),
-  );
-  return ids.map((id) => map.get(id) ?? id).join(", ");
-}
-
 function submitQuiz(auto = false) {
   if (!assessment || submitted) return;
   submitted = true;
@@ -531,49 +350,15 @@ function submitQuiz(auto = false) {
   llmFeedbackResults = {};
   llmFeedbackErrors = {};
   const completedAt = new Date();
-  const results = questions.map((question) =>
-    checkQuestion(question, answers[question.id]),
-  );
-  const deterministicResults = results.filter(
-    (result): result is DeterministicQuestionResult =>
-      !result.requiresManualGrading,
-  );
-  const subjectiveResults = results.filter(
-    (result): result is SubjectiveQuestionResult =>
-      result.requiresManualGrading,
-  );
-  const deterministicEarned = deterministicResults.reduce(
-    (sum, result) => sum + result.earned,
-    0,
-  );
-  const deterministicMax = deterministicResults.reduce(
-    (sum, result) => sum + result.max,
-    0,
-  );
-  const deterministicPercentage =
-    deterministicMax === 0 ? 0 : (deterministicEarned / deterministicMax) * 100;
-  const subjectiveMax = subjectiveResults.reduce(
-    (sum, result) => sum + result.max,
-    0,
-  );
-  const elapsed = startedAt
-    ? Math.max(
-        0,
-        Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000),
-      )
-    : elapsedSec;
-  submission = {
-    results,
-    deterministicEarned,
-    deterministicMax,
-    deterministicPercentage,
-    subjectiveMax,
-    pendingSubjectiveCount: subjectiveResults.length,
-    startedAt: startedAt ?? new Date(),
+  submission = evaluateSubmission({
+    assessment,
+    questions,
+    answers,
+    startedAt,
     completedAt,
-    elapsedSec: elapsed,
+    elapsedSec,
     autoSubmitted: auto,
-  };
+  });
   showResultDialog = true;
 }
 
@@ -583,22 +368,25 @@ function resetAssessment() {
 }
 
 function exportCsv() {
-  if (!assessment || !submission) return;
-  const rows: CsvQuestionResult[] = submission.results.map((result, index) => ({
-    questionNumber: index + 1,
-    questionId: result.question.id,
-    questionText: result.question.text,
-    type: result.question.type,
-    weight: questionWeight(result.question),
-    tags: result.question.tags ?? [],
-    userAnswer: result.userAnswer,
-    correctAnswer: result.correctAnswer,
-    earned: result.requiresManualGrading ? null : result.earned,
-    max: result.max,
-    result: result.status,
+  if (!submission) return;
+  const serializable = submission.results.map((result, index) =>
+    createSerializableQuestionResult(result, index),
+  );
+  const rows: CsvQuestionResult[] = serializable.map((entry) => ({
+    questionNumber: entry.position,
+    questionId: entry.questionId,
+    questionText: entry.questionText,
+    type: entry.type,
+    weight: entry.weight,
+    tags: entry.tags,
+    userAnswer: entry.userAnswer,
+    correctAnswer: entry.correctAnswer,
+    earned: entry.earned,
+    max: entry.max,
+    result: entry.status,
   }));
   const summary: CsvSummary = {
-    assessmentTitle: assessment.meta.title,
+    assessmentTitle: submission.assessment.meta.title,
     deterministicScore: submission.deterministicEarned,
     deterministicMax: submission.deterministicMax,
     deterministicPercentage: submission.deterministicPercentage,
@@ -608,7 +396,10 @@ function exportCsv() {
     timeElapsedSec: submission.elapsedSec,
   };
   const csv = buildCsv(summary, rows);
-  downloadCsv(`${sanitizeFilename(assessment.meta.title)}-results.csv`, csv);
+  downloadCsv(
+    `${sanitizeFilename(submission.assessment.meta.title)}-results.csv`,
+    csv,
+  );
 }
 
 function sanitizeFilename(value: string): string {
@@ -631,12 +422,17 @@ function exportAssessment() {
 }
 
 function exportJsonSummary() {
-  if (!assessment || !submission) return;
+  if (!submission) return;
+  const summary = submission;
+  const serializable = summary.results.map((result, index) =>
+    createSerializableQuestionResult(result, index),
+  );
+  const { assessment: assessed } = summary;
   const data = {
     assessment: {
-      title: assessment.meta.title,
-      description: assessment.meta.description ?? null,
-      timeLimitSec: assessment.meta.timeLimitSec ?? null,
+      title: assessed.meta.title,
+      description: assessed.meta.description ?? null,
+      timeLimitSec: assessed.meta.timeLimitSec ?? null,
     },
     deterministic: {
       earned: submission.deterministicEarned,
@@ -653,27 +449,30 @@ function exportJsonSummary() {
       elapsedSec: submission.elapsedSec,
       autoSubmitted: submission.autoSubmitted,
     },
-    results: submission.results.map((result, index) => ({
-      position: index + 1,
-      questionId: result.question.id,
-      type: result.question.type,
-      weight: questionWeight(result.question),
-      tags: result.question.tags ?? [],
-      status: result.status,
-      earned: result.requiresManualGrading ? null : result.earned,
-      max: result.max,
-      userAnswer: result.userAnswer,
-      correctAnswer: result.correctAnswer,
-      feedback: result.feedback ?? null,
-      rubrics: result.requiresManualGrading ? result.rubrics : undefined,
-      llmPrompt: result.requiresManualGrading
-        ? buildSubjectivePrompt({
-            question: result.question,
-            userAnswer: result.userAnswer,
-            maxScore: result.max,
-          })
-        : undefined,
-    })),
+    results: serializable.map((entry, index) => {
+      const result = summary.results[index];
+      return {
+        position: entry.position,
+        questionId: entry.questionId,
+        type: entry.type,
+        weight: entry.weight,
+        tags: entry.tags,
+        status: entry.status,
+        earned: entry.earned,
+        max: entry.max,
+        userAnswer: entry.userAnswer,
+        correctAnswer: entry.correctAnswer,
+        feedback: entry.feedback,
+        rubrics: entry.rubrics,
+        llmPrompt: result.requiresManualGrading
+          ? buildSubjectivePrompt({
+              question: result.question,
+              userAnswer: entry.userAnswer,
+              maxScore: entry.max,
+            })
+          : undefined,
+      };
+    }),
   };
   const blob = new Blob([`${JSON.stringify(data, null, 2)}\n`], {
     type: "application/json;charset=utf-8",
@@ -681,7 +480,7 @@ function exportJsonSummary() {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${sanitizeFilename(assessment.meta.title)}-summary.json`;
+  anchor.download = `${sanitizeFilename(assessed.meta.title)}-summary.json`;
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
