@@ -94,8 +94,7 @@ export function evaluateQuestion(
       max,
       userAnswer,
       correctAnswer: "",
-      feedback:
-        subjective.feedback?.incorrect ?? subjective.feedback?.correct,
+      feedback: subjective.feedback?.incorrect ?? subjective.feedback?.correct,
       rubrics: subjective.rubrics,
     };
   }
@@ -222,11 +221,13 @@ export function evaluateSubmission({
   );
 
   const deterministicResults = results.filter(
-    (result): result is DeterministicQuestionResult => !result.requiresManualGrading,
+    (result): result is DeterministicQuestionResult =>
+      !result.requiresManualGrading,
   );
 
   const subjectiveResults = results.filter(
-    (result): result is SubjectiveQuestionResult => result.requiresManualGrading,
+    (result): result is SubjectiveQuestionResult =>
+      result.requiresManualGrading,
   );
 
   const deterministicEarned = deterministicResults.reduce(
@@ -248,7 +249,10 @@ export function evaluateSubmission({
   );
 
   const derivedElapsed = startedAt
-    ? Math.max(0, Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000))
+    ? Math.max(
+        0,
+        Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000),
+      )
     : elapsedSec;
 
   return {
