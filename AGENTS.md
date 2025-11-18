@@ -12,7 +12,7 @@ This repository uses Svelte, TailwindCSS, and shadcn-svelte to deliver offline-c
 - Favor Zod validation and utility helpers already present rather than introducing new parsing approaches.
 
 ## Testing expectations
-- Run `pnpm check` for routine edits. For changes affecting bundling or assets, also run `pnpm build` to verify both HTML outputs are produced.
+- Run `pnpm check` and `pnpm format` for routine edits. For changes affecting bundling or assets, also run `pnpm build` to verify both HTML outputs are produced.
 
 ## PR / summary notes
 - Summaries should highlight user-visible behavior changes and any implications for offline usage.
