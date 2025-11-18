@@ -8,6 +8,11 @@ const LOCAL_STORAGE_VERSION = 1;
 export interface RecentFileEntry {
   name: string;
   lastOpened: number;
+  /**
+   * Cached JSON assessment content for offline reloads. Older entries may not
+   * include this field, so callers should handle `undefined` gracefully.
+   */
+  data?: string;
 }
 
 interface SoloQuizDB extends DBSchema {
@@ -61,7 +66,9 @@ function isRecentEntry(value: unknown): value is RecentFileEntry {
     typeof value === "object" &&
     value !== null &&
     typeof (value as RecentFileEntry).name === "string" &&
-    typeof (value as RecentFileEntry).lastOpened === "number"
+    typeof (value as RecentFileEntry).lastOpened === "number" &&
+    ((value as RecentFileEntry).data === undefined ||
+      typeof (value as RecentFileEntry).data === "string")
   );
 }
 
@@ -146,8 +153,13 @@ function mergeEntry(
   list: RecentFileEntry[],
   entry: RecentFileEntry,
 ): RecentFileEntry[] {
+  const existing = list.find((item) => item.name === entry.name);
+  const merged: RecentFileEntry = {
+    ...entry,
+    data: entry.data ?? existing?.data,
+  };
   const filtered = list.filter((item) => item.name !== entry.name);
-  return sortRecents([entry, ...filtered]);
+  return sortRecents([merged, ...filtered]);
 }
 
 async function getRecentFilesFromDb(
@@ -171,8 +183,11 @@ export async function getRecentFiles(limit = 10): Promise<RecentFileEntry[]> {
   return all.slice(0, limit);
 }
 
-export async function touchRecentFile(name: string): Promise<void> {
-  const entry: RecentFileEntry = { name, lastOpened: Date.now() };
+export async function touchRecentFile(
+  name: string,
+  data?: string,
+): Promise<void> {
+  const entry: RecentFileEntry = { name, lastOpened: Date.now(), data };
   const db = await getDb();
   if (!db) {
     const updated = mergeEntry(readLocalRecents(), entry);

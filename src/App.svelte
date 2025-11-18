@@ -1,7 +1,17 @@
 <script lang="ts">
 import { onDestroy, onMount, tick } from "svelte";
 import { slide } from "svelte/transition";
-import { Download, Moon, PanelLeft, PanelRight, Sun } from "lucide-svelte";
+import {
+  Download,
+  Eye,
+  EyeOff,
+  Moon,
+  PanelLeft,
+  PanelRight,
+  Sun,
+  Trash2,
+  Upload,
+} from "lucide-svelte";
 import Button from "./lib/components/ui/Button.svelte";
 import {
   Card,
@@ -236,7 +246,10 @@ function formatTime(sec: number): string {
   return `${minutes}:${seconds}`;
 }
 
-function resetState(data: Assessment, sourceName?: string) {
+function resetState(
+  data: Assessment,
+  source?: { name: string; content?: string },
+) {
   assessment = data;
   const baseQuestions = data.questions;
   questions = data.meta.shuffleQuestions
@@ -287,8 +300,8 @@ function resetState(data: Assessment, sourceName?: string) {
       }
     }
   }, 1000);
-  if (sourceName) {
-    touchRecentFile(sourceName).then(async () => {
+  if (source?.name) {
+    touchRecentFile(source.name, source.content).then(async () => {
       recentFiles = await getRecentFiles();
     });
   }
@@ -314,9 +327,39 @@ async function handleFile(file: File) {
       questions = [];
       return;
     }
-    resetState(result.data, file.name);
+    resetState(result.data, { name: file.name, content: text });
   } catch (error) {
     parseErrors = [{ path: "file", message: (error as Error).message }];
+    assessment = null;
+    questions = [];
+  }
+}
+
+async function loadRecentAssessment(entry: RecentFileEntry) {
+  if (!entry.data) {
+    parseErrors = [
+      {
+        path: entry.name,
+        message: "Cached data missing; please re-import the file.",
+      },
+    ];
+    assessment = null;
+    questions = [];
+    return;
+  }
+
+  try {
+    const raw = JSON.parse(entry.data);
+    const result = parseAssessment(raw);
+    if (!result.ok) {
+      parseErrors = result.issues;
+      assessment = null;
+      questions = [];
+      return;
+    }
+    resetState(result.data, { name: entry.name, content: entry.data });
+  } catch (error) {
+    parseErrors = [{ path: entry.name, message: (error as Error).message }];
     assessment = null;
     questions = [];
   }
@@ -778,12 +821,24 @@ function setOrderingTouched(questionId: string, value: boolean) {
           </div>
           <Button
             variant="ghost"
-            size="sm"
-            class="h-8 px-2 text-xs"
+            size="icon"
+            class="h-8 w-8"
             aria-pressed={!panelVisibility.assessment}
+            title={
+              panelVisibility.assessment
+                ? "Show assessment panel"
+                : "Hide assessment panel"
+            }
             on:click={() => togglePanel("assessment")}
           >
-            {panelVisibility.assessment ? "Show" : "Hide"}
+            {#if panelVisibility.assessment}
+              <Eye class="h-4 w-4" aria-hidden="true" />
+            {:else}
+              <EyeOff class="h-4 w-4" aria-hidden="true" />
+            {/if}
+            <span class="sr-only">
+              {panelVisibility.assessment ? "Show" : "Hide"} assessment panel
+            </span>
           </Button>
         </CardHeader>
         {#if !panelVisibility.assessment}
@@ -802,7 +857,15 @@ function setOrderingTouched(questionId: string, value: boolean) {
             >
               <p class="font-medium">Drop JSON here</p>
               <p class="text-muted-foreground">or</p>
-              <Button on:click={() => fileInput?.click()}>Choose File</Button>
+              <Button
+                size="icon"
+                variant="secondary"
+                title="Choose file"
+                on:click={() => fileInput?.click()}
+              >
+                <Upload class="h-4 w-4" aria-hidden="true" />
+                <span class="sr-only">Choose file</span>
+              </Button>
               <input
                 class="hidden"
                 type="file"
@@ -847,12 +910,24 @@ function setOrderingTouched(questionId: string, value: boolean) {
           </div>
           <Button
             variant="ghost"
-            size="sm"
-            class="h-8 px-2 text-xs"
+            size="icon"
+            class="h-8 w-8"
             aria-pressed={!panelVisibility.recents}
+            title={
+              panelVisibility.recents
+                ? "Show recent files"
+                : "Hide recent files"
+            }
             on:click={() => togglePanel("recents")}
           >
-            {panelVisibility.recents ? "Show" : "Hide"}
+            {#if panelVisibility.recents}
+              <Eye class="h-4 w-4" aria-hidden="true" />
+            {:else}
+              <EyeOff class="h-4 w-4" aria-hidden="true" />
+            {/if}
+            <span class="sr-only">
+              {panelVisibility.recents ? "Show" : "Hide"} recent files
+            </span>
           </Button>
         </CardHeader>
         {#if !panelVisibility.recents}
@@ -862,14 +937,30 @@ function setOrderingTouched(questionId: string, value: boolean) {
             {:else}
               <ul class="space-y-2 text-sm">
                 {#each recentFiles as file}
-                  <li class="flex flex-col rounded-md border border-border px-3 py-2">
-                    <span class="font-medium">{file.name}</span>
-                    <span class="text-xs text-muted-foreground">{formatter.format(new Date(file.lastOpened))}</span>
+                  <li>
+                    <button
+                      type="button"
+                      class="flex w-full flex-col rounded-md border border-border px-3 py-2 text-left transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      on:click={() => loadRecentAssessment(file)}
+                      title={`Load ${file.name}`}
+                    >
+                      <span class="font-medium">{file.name}</span>
+                      <span class="text-xs text-muted-foreground">{formatter.format(new Date(file.lastOpened))}</span>
+                    </button>
                   </li>
                 {/each}
               </ul>
-              <Button variant="ghost" size="sm" on:click={() => clearRecentFiles().then(async () => (recentFiles = await getRecentFiles()))}>
-                Clear history
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Clear history"
+                on:click={() =>
+                  clearRecentFiles().then(async () =>
+                    (recentFiles = await getRecentFiles()),
+                  )}
+                >
+                <Trash2 class="h-4 w-4" aria-hidden="true" />
+                <span class="sr-only">Clear history</span>
               </Button>
             {/if}
           </CardContent>
@@ -885,12 +976,24 @@ function setOrderingTouched(questionId: string, value: boolean) {
             </div>
             <Button
               variant="ghost"
-              size="sm"
-              class="h-8 px-2 text-xs"
+              size="icon"
+              class="h-8 w-8"
               aria-pressed={!panelVisibility.questions}
+              title={
+                panelVisibility.questions
+                  ? "Show question navigator"
+                  : "Hide question navigator"
+              }
               on:click={() => togglePanel("questions")}
             >
-              {panelVisibility.questions ? "Show" : "Hide"}
+              {#if panelVisibility.questions}
+                <Eye class="h-4 w-4" aria-hidden="true" />
+              {:else}
+                <EyeOff class="h-4 w-4" aria-hidden="true" />
+              {/if}
+              <span class="sr-only">
+                {panelVisibility.questions ? "Show" : "Hide"} question list
+              </span>
             </Button>
           </CardHeader>
           {#if !panelVisibility.questions}
