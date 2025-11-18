@@ -1,4 +1,5 @@
 import katexImport from "katex";
+import MarkdownIt from "markdown-it";
 
 type KatexInstance = typeof katexImport;
 
@@ -33,6 +34,13 @@ function tokenizeMath(input: string): Token[] {
   let i = 0;
   while (i < input.length) {
     const char = input[i];
+    if (char === "$" && i > 0 && input[i - 1] === "\\") {
+      buffer = buffer.slice(0, -1);
+      buffer += "$";
+      i += 1;
+      continue;
+    }
+
     if (char === "$") {
       let delimiter = "$";
       let display = false;
@@ -43,7 +51,10 @@ function tokenizeMath(input: string): Token[] {
       let j = i + delimiter.length;
       let found = false;
       while (j < input.length) {
-        if (input.slice(j, j + delimiter.length) === delimiter) {
+        if (
+          input.slice(j, j + delimiter.length) === delimiter &&
+          input[j - 1] !== "\\"
+        ) {
           found = true;
           break;
         }
@@ -70,25 +81,54 @@ function tokenizeMath(input: string): Token[] {
   return tokens;
 }
 
+function renderMath(content: string, display: boolean): string {
+  try {
+    return katex.renderToString(content, {
+      throwOnError: false,
+      displayMode: display,
+      trust: false,
+      strict: "ignore",
+    });
+  } catch (error) {
+    console.warn("KaTeX failed to render", error);
+    return escapeHtml(content);
+  }
+}
+
+const markdown = new MarkdownIt({
+  html: false,
+  linkify: true,
+  typographer: true,
+  breaks: true,
+});
+
 export function renderWithKatex(input: string): string {
   const tokens = tokenizeMath(input);
-  return tokens
+  const placeholders = new Map<string, string>();
+  let index = 0;
+  const source = tokens
     .map((token) => {
       if (token.type === "text") {
-        return escapeHtml(token.content);
+        return token.content;
       }
-
-      try {
-        return katex.renderToString(token.content, {
-          throwOnError: false,
-          displayMode: token.display,
-          trust: false,
-          strict: "ignore",
-        });
-      } catch (error) {
-        console.warn("KaTeX failed to render", error);
-        return escapeHtml(token.content);
-      }
+      const key = `@@MATH_${index}@@`;
+      placeholders.set(key, renderMath(token.content, token.display));
+      index += 1;
+      return key;
     })
     .join("");
+
+  let rendered = markdown.render(source);
+  for (const [placeholder, value] of placeholders.entries()) {
+    rendered = rendered.replaceAll(placeholder, value);
+  }
+  const trimmed = rendered.trim();
+  if (
+    trimmed.startsWith("<p>") &&
+    trimmed.endsWith("</p>") &&
+    trimmed.indexOf("<p", 3) === -1
+  ) {
+    return trimmed.slice(3, -4);
+  }
+  return rendered;
 }

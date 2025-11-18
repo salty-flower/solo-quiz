@@ -1127,12 +1127,14 @@ function setOrderingTouched(questionId: string, value: boolean) {
                         </span>
                         {#if currentResult}
                           <span class="block text-xs text-muted-foreground">
-                            {currentResult.question.id === singleQuestion.id &&
+                            {#if currentResult.question.id === singleQuestion.id &&
                             !currentResult.requiresManualGrading &&
                             currentResult.status === "correct" &&
-                            option.id === singleQuestion.correct
-                              ? "Correct answer"
-                              : option.explanation}
+                            option.id === singleQuestion.correct}
+                              Correct answer
+                            {:else if option.explanation}
+                              {@html renderWithKatex(option.explanation)}
+                            {/if}
                           </span>
                         {/if}
                       </span>
@@ -1166,8 +1168,10 @@ function setOrderingTouched(questionId: string, value: boolean) {
                         <span class="text-sm font-medium">
                           {@html renderWithKatex(option.label)}
                         </span>
-                        {#if currentResult}
-                          <span class="block text-xs text-muted-foreground">{option.explanation}</span>
+                        {#if currentResult && option.explanation}
+                          <span class="block text-xs text-muted-foreground">
+                            {@html renderWithKatex(option.explanation)}
+                          </span>
                         {/if}
                       </span>
                     </label>
@@ -1188,11 +1192,11 @@ function setOrderingTouched(questionId: string, value: boolean) {
                       value={answers[currentQuestion.id] as string}
                       on:input={(event) => updateTouched(currentQuestion, (event.target as HTMLTextAreaElement).value)}
                     ></textarea>
-                    <div class="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-                      <p class="mb-2 font-semibold uppercase tracking-wide text-muted-foreground">
-                        Rubrics
-                      </p>
-                      {#if currentResult && currentResult.requiresManualGrading}
+                    {#if currentResult && currentResult.requiresManualGrading}
+                      <div class="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
+                        <p class="mb-2 font-semibold uppercase tracking-wide text-muted-foreground">
+                          Rubrics
+                        </p>
                         <ul class="ml-4 list-disc space-y-1">
                           {#each currentResult.rubrics as rubric}
                             <li>
@@ -1205,12 +1209,8 @@ function setOrderingTouched(questionId: string, value: boolean) {
                             </li>
                           {/each}
                         </ul>
-                      {:else}
-                        <p class="ml-1 text-muted-foreground">
-                          Rubrics will be available when reviewing your submission.
-                        </p>
-                      {/if}
-                    </div>
+                      </div>
+                    {/if}
                   </div>
                 {:else if currentQuestion.type === "numeric"}
                   <input
