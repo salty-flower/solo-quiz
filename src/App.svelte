@@ -52,6 +52,128 @@ const formatter = new Intl.DateTimeFormat(undefined, {
   timeStyle: "short",
 });
 
+const EXAMPLE_ASSESSMENTS: {
+  id: string;
+  description: string;
+  data: Assessment;
+}[] = [
+  {
+    id: "sample-stem",
+    description:
+      "Demonstrates every supported question type including math rendering.",
+    data: {
+      schemaVersion: "1.0",
+      meta: {
+        title: "Sample STEM Quiz",
+        description:
+          "Demonstrates every supported question type including math rendering.",
+        shuffleQuestions: true,
+        timeLimitSec: 600,
+      },
+      questions: [
+        {
+          id: "q1",
+          type: "single",
+          text: "What is the derivative of $x^2$?",
+          options: [
+            {
+              id: "a",
+              label: "$2x$",
+              explanation: "d/dx of $x^n$ is $nx^{n-1}$.",
+            },
+            { id: "b", label: "$x$" },
+            { id: "c", label: "$x^3$" },
+          ],
+          correct: "a",
+          weight: 2,
+          feedback: {
+            correct: "Great! The power rule applies here.",
+            incorrect:
+              "Remember the power rule: multiply by the exponent and subtract one.",
+          },
+          tags: ["calculus"],
+        },
+        {
+          id: "q2",
+          type: "multi",
+          text: "Select all prime numbers.",
+          options: [
+            { id: "a", label: "2" },
+            { id: "b", label: "4" },
+            { id: "c", label: "5" },
+            { id: "d", label: "9" },
+          ],
+          correct: ["a", "c"],
+          tags: ["number theory"],
+          weight: 1,
+          feedback: {
+            correct: "2 and 5 are prime numbers.",
+            incorrect: "Only numbers divisible by 1 and themselves are prime.",
+          },
+        },
+        {
+          id: "q3",
+          type: "fitb",
+          text: "Fill in the blank: The chemical symbol for water is _____.",
+          accept: ["H2O", { pattern: "^h\\s*2\\s*o$", flags: "i" }],
+          normalize: "lower",
+          tags: ["chemistry"],
+          feedback: {
+            correct: "Correct!",
+            incorrect: "Water is H₂O.",
+          },
+        },
+        {
+          id: "q4",
+          type: "numeric",
+          text: "How many degrees are there in $\\pi$ radians?",
+          correct: 180,
+          tolerance: 0,
+          weight: 1.5,
+          tags: ["trigonometry"],
+        },
+        {
+          id: "q5",
+          type: "ordering",
+          text: "Arrange the planets from the Sun outward (using the first four planets).",
+          items: ["Earth", "Mercury", "Mars", "Venus"],
+          correctOrder: ["Mercury", "Venus", "Earth", "Mars"],
+          weight: 1,
+          tags: ["astronomy"],
+        },
+        {
+          id: "q6",
+          type: "subjective",
+          text: "In two to three sentences, explain why conservation of energy is useful when solving mechanics problems.",
+          rubrics: [
+            {
+              title: "States the principle",
+              description:
+                "Mentions that the total energy of an isolated system remains constant or that energy cannot be created or destroyed.",
+            },
+            {
+              title: "Connects to problem solving",
+              description:
+                "Explains how the principle simplifies calculations or reduces the number of unknowns in mechanics scenarios.",
+            },
+            {
+              title: "Clarity",
+              description:
+                "Provides a coherent explanation that is understandable to another student.",
+            },
+          ],
+          weight: 3,
+          tags: ["physics", "reasoning"],
+          feedback: {
+            incorrect:
+              "A human or LLM grader should review this response using the provided rubrics.",
+          },
+        },
+      ],
+    },
+  },
+];
+
 let fileInput: HTMLInputElement | null = null;
 let dropActive = false;
 let recentFiles: RecentFileEntry[] = [];
@@ -81,6 +203,15 @@ let promptCopyTimeout: number | null = null;
 let llmFeedbackInputs: Record<string, string> = {};
 let llmFeedbackResults: Record<string, LlmFeedback | undefined> = {};
 let llmFeedbackErrors: Record<string, string | null> = {};
+type PanelKey = "assessment" | "recents" | "questions";
+type PanelVisibility = Record<PanelKey, boolean>;
+const PANEL_STORAGE_KEY = "solo-quiz-panel-visibility-v1";
+const DEFAULT_PANEL_VISIBILITY: PanelVisibility = {
+  assessment: false,
+  recents: false,
+  questions: false,
+};
+let panelVisibility: PanelVisibility = { ...DEFAULT_PANEL_VISIBILITY };
 
 const SYSTEM_PREFERS_DARK = () =>
   typeof window !== "undefined" &&
@@ -105,13 +236,54 @@ function applyTheme() {
   }
 }
 
+function loadPanelVisibility(): PanelVisibility {
+  if (typeof localStorage === "undefined") {
+    return { ...DEFAULT_PANEL_VISIBILITY };
+  }
+
+  const stored = localStorage.getItem(PANEL_STORAGE_KEY);
+  if (!stored) {
+    return { ...DEFAULT_PANEL_VISIBILITY };
+  }
+
+  try {
+    const parsed = JSON.parse(stored) as Partial<PanelVisibility>;
+    const result: PanelVisibility = { ...DEFAULT_PANEL_VISIBILITY };
+    for (const key of Object.keys(result) as PanelKey[]) {
+      if (typeof parsed[key] === "boolean") {
+        result[key] = parsed[key] as boolean;
+      }
+    }
+    return result;
+  } catch (error) {
+    console.warn("Unable to parse panel preferences; resetting", error);
+    localStorage.removeItem(PANEL_STORAGE_KEY);
+    return { ...DEFAULT_PANEL_VISIBILITY };
+  }
+}
+
+function savePanelVisibility(value: PanelVisibility) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(value));
+  } catch (error) {
+    console.warn("Unable to store panel preferences", error);
+  }
+}
+
+function togglePanel(key: PanelKey) {
+  panelVisibility = { ...panelVisibility, [key]: !panelVisibility[key] };
+}
+
 onMount(async () => {
   loadTheme();
   applyTheme();
+  panelVisibility = loadPanelVisibility();
   recentFiles = await getRecentFiles();
 });
 
 $: if (theme) applyTheme();
+$: savePanelVisibility(panelVisibility);
 
 onDestroy(() => {
   if (timerId) {
@@ -406,6 +578,23 @@ function sanitizeFilename(value: string): string {
   return value.replace(/[^a-z0-9-_]+/gi, "-");
 }
 
+function downloadExampleAssessment(id: string) {
+  const example = EXAMPLE_ASSESSMENTS.find((entry) => entry.id === id);
+  if (!example) return;
+
+  const blob = new Blob([`${JSON.stringify(example.data, null, 2)}\n`], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${sanitizeFilename(example.data.meta.title)}.json`;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 function exportAssessment() {
   if (!assessment) return;
   const blob = new Blob([JSON.stringify(assessment, null, 2)], {
@@ -638,88 +827,147 @@ function setOrderingTouched(questionId: string, value: boolean) {
   <main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 lg:flex-row">
     <aside class="w-full space-y-4 lg:w-64">
       <Card>
-        <CardHeader>
-          <CardTitle>Assessment</CardTitle>
-          <CardDescription>Import JSON or drag & drop to get started.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div
-            class={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center text-sm transition ${
-              dropActive ? "border-primary bg-primary/10" : "border-muted"
-            }`}
-            on:dragover|preventDefault={onDragOver}
-            on:dragleave={onDragLeave}
-            on:drop={onDrop}
-            role="button"
-            tabindex="0"
-            aria-label="Load assessment JSON file"
-            on:keydown={handleDropzoneKey}
-          >
-            <p class="font-medium">Drop JSON here</p>
-            <p class="text-muted-foreground">or</p>
-            <Button on:click={() => fileInput?.click()}>Choose File</Button>
-            <input
-              class="hidden"
-              type="file"
-              accept="application/json"
-              bind:this={fileInput}
-              on:change={onFileInputChange}
-            />
+        <CardHeader className="flex items-start justify-between space-y-0">
+          <div>
+            <CardTitle>Assessment</CardTitle>
+            <CardDescription>Import JSON or drag & drop to get started.</CardDescription>
           </div>
-          <Separator />
-          <label class="flex items-center justify-between text-sm">
-            <span>Require all answers before submit</span>
-            <Switch bind:checked={requireAllAnswered} label="Require all answers" />
-          </label>
-        </CardContent>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-8 px-2 text-xs"
+            aria-pressed={!panelVisibility.assessment}
+            on:click={() => togglePanel("assessment")}
+          >
+            {panelVisibility.assessment ? "Show" : "Hide"}
+          </Button>
+        </CardHeader>
+        {#if !panelVisibility.assessment}
+          <CardContent className="space-y-4">
+            <div
+              class={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center text-sm transition ${
+                dropActive ? "border-primary bg-primary/10" : "border-muted"
+              }`}
+              on:dragover|preventDefault={onDragOver}
+              on:dragleave={onDragLeave}
+              on:drop={onDrop}
+              role="button"
+              tabindex="0"
+              aria-label="Load assessment JSON file"
+              on:keydown={handleDropzoneKey}
+            >
+              <p class="font-medium">Drop JSON here</p>
+              <p class="text-muted-foreground">or</p>
+              <Button on:click={() => fileInput?.click()}>Choose File</Button>
+              <input
+                class="hidden"
+                type="file"
+                accept="application/json"
+                bind:this={fileInput}
+                on:change={onFileInputChange}
+              />
+            </div>
+            <Separator />
+            <label class="flex items-center justify-between text-sm">
+              <span>Require all answers before submit</span>
+              <Switch bind:checked={requireAllAnswered} label="Require all answers" />
+            </label>
+            <Separator />
+            <div class="space-y-2">
+              <p class="text-sm font-medium">Download an example assessment</p>
+              {#each EXAMPLE_ASSESSMENTS as example}
+                <div class="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
+                  <div class="space-y-1">
+                    <p class="font-medium">{example.data.meta.title}</p>
+                    <p class="text-xs text-muted-foreground">{example.description}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    class="ml-auto"
+                    on:click={() => downloadExampleAssessment(example.id)}
+                  >
+                    Download
+                  </Button>
+                </div>
+              {/each}
+            </div>
+          </CardContent>
+        {/if}
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Recent files</CardTitle>
-          <CardDescription>IndexedDB is used when available.</CardDescription>
+        <CardHeader className="flex items-start justify-between space-y-0">
+          <div>
+            <CardTitle>Recent files</CardTitle>
+            <CardDescription>Stored in IndexedDB or localStorage when available.</CardDescription>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-8 px-2 text-xs"
+            aria-pressed={!panelVisibility.recents}
+            on:click={() => togglePanel("recents")}
+          >
+            {panelVisibility.recents ? "Show" : "Hide"}
+          </Button>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {#if recentFiles.length === 0}
-            <p class="text-sm text-muted-foreground">No recent files yet.</p>
-          {:else}
-            <ul class="space-y-2 text-sm">
-              {#each recentFiles as file}
-                <li class="flex flex-col rounded-md border border-border px-3 py-2">
-                  <span class="font-medium">{file.name}</span>
-                  <span class="text-xs text-muted-foreground">{formatter.format(new Date(file.lastOpened))}</span>
-                </li>
-              {/each}
-            </ul>
-            <Button variant="ghost" size="sm" on:click={() => clearRecentFiles().then(async () => (recentFiles = await getRecentFiles()))}>
-              Clear history
-            </Button>
-          {/if}
-        </CardContent>
+        {#if !panelVisibility.recents}
+          <CardContent className="space-y-3">
+            {#if recentFiles.length === 0}
+              <p class="text-sm text-muted-foreground">No recent files yet.</p>
+            {:else}
+              <ul class="space-y-2 text-sm">
+                {#each recentFiles as file}
+                  <li class="flex flex-col rounded-md border border-border px-3 py-2">
+                    <span class="font-medium">{file.name}</span>
+                    <span class="text-xs text-muted-foreground">{formatter.format(new Date(file.lastOpened))}</span>
+                  </li>
+                {/each}
+              </ul>
+              <Button variant="ghost" size="sm" on:click={() => clearRecentFiles().then(async () => (recentFiles = await getRecentFiles()))}>
+                Clear history
+              </Button>
+            {/if}
+          </CardContent>
+        {/if}
       </Card>
 
       {#if assessment}
         <Card>
-          <CardHeader>
-            <CardTitle>Questions</CardTitle>
-            <CardDescription>Jump to any question.</CardDescription>
+          <CardHeader className="flex items-start justify-between space-y-0">
+            <div>
+              <CardTitle>Questions</CardTitle>
+              <CardDescription>Jump to any question.</CardDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="h-8 px-2 text-xs"
+              aria-pressed={!panelVisibility.questions}
+              on:click={() => togglePanel("questions")}
+            >
+              {panelVisibility.questions ? "Show" : "Hide"}
+            </Button>
           </CardHeader>
-          <CardContent>
-            <nav class="grid grid-cols-5 gap-2 text-sm md:grid-cols-4 lg:grid-cols-3">
-              {#each questions as question, index}
-                <button
-                  type="button"
-                  class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${questionNavStyles(
-                    question,
-                    index,
-                  )}`}
-                  on:click={() => navigateTo(index)}
-                >
-                  {index + 1}
-                </button>
-              {/each}
-            </nav>
-          </CardContent>
+          {#if !panelVisibility.questions}
+            <CardContent>
+              <nav class="grid grid-cols-5 gap-2 text-sm md:grid-cols-4 lg:grid-cols-3">
+                {#each questions as question, index}
+                  <button
+                    type="button"
+                    class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${questionNavStyles(
+                      question,
+                      index,
+                    )}`}
+                    on:click={() => navigateTo(index)}
+                  >
+                    {index + 1}
+                  </button>
+                {/each}
+              </nav>
+            </CardContent>
+          {/if}
         </Card>
       {/if}
     </aside>
