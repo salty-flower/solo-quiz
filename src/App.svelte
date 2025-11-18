@@ -88,12 +88,14 @@ let llmFeedbackErrors: Record<string, string | null> = {};
 type PanelKey = "assessment" | "recents" | "questions";
 type PanelVisibility = Record<PanelKey, boolean>;
 const PANEL_STORAGE_KEY = "solo-quiz-panel-visibility-v1";
+const SIDEBAR_STORAGE_KEY = "solo-quiz-sidebar-visible-v1";
 const DEFAULT_PANEL_VISIBILITY: PanelVisibility = {
   assessment: false,
   recents: false,
   questions: false,
 };
 let panelVisibility: PanelVisibility = { ...DEFAULT_PANEL_VISIBILITY };
+let sidebarVisible = true;
 const exampleAssessments = getExampleAssessments();
 
 const SYSTEM_PREFERS_DARK = () =>
@@ -154,19 +156,47 @@ function savePanelVisibility(value: PanelVisibility) {
   }
 }
 
+function loadSidebarVisibility() {
+  if (typeof localStorage === "undefined") return true;
+  try {
+    const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    if (stored === null) return true;
+    return JSON.parse(stored) === true;
+  } catch (error) {
+    console.warn("Unable to parse sidebar preference; resetting", error);
+    localStorage.removeItem(SIDEBAR_STORAGE_KEY);
+    return true;
+  }
+}
+
+function saveSidebarVisibility(value: boolean) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(value));
+  } catch (error) {
+    console.warn("Unable to store sidebar preference", error);
+  }
+}
+
 function togglePanel(key: PanelKey) {
   panelVisibility = { ...panelVisibility, [key]: !panelVisibility[key] };
+}
+
+function toggleSidebar() {
+  sidebarVisible = !sidebarVisible;
 }
 
 onMount(async () => {
   loadTheme();
   applyTheme();
   panelVisibility = loadPanelVisibility();
+  sidebarVisible = loadSidebarVisibility();
   recentFiles = await getRecentFiles();
 });
 
 $: if (theme) applyTheme();
 $: savePanelVisibility(panelVisibility);
+$: saveSidebarVisibility(sidebarVisible);
 
 onDestroy(() => {
   if (timerId) {
@@ -688,7 +718,16 @@ function setOrderingTouched(questionId: string, value: boolean) {
           <p class="text-sm text-muted-foreground">Load an assessment JSON to begin.</p>
         {/if}
       </div>
-      <div class="flex items-center gap-4">
+      <div class="flex flex-wrap items-center gap-3 sm:justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          class="h-9"
+          aria-pressed={!sidebarVisible}
+          on:click={toggleSidebar}
+        >
+          {sidebarVisible ? "Hide sidebar" : "Show sidebar"}
+        </Button>
         {#if assessment}
           <div class="rounded-md border px-3 py-1 text-sm">
             <span class="font-medium">{timeLimitSec ? "Time Remaining" : "Elapsed"}:</span>
@@ -707,8 +746,9 @@ function setOrderingTouched(questionId: string, value: boolean) {
     </div>
   </header>
 
-  <main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 lg:flex-row">
-    <aside class="w-full space-y-4 lg:w-64">
+  <main class={`mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 ${sidebarVisible ? "lg:flex-row" : ""}`}>
+    {#if sidebarVisible}
+      <aside class="w-full space-y-4 lg:w-64">
       <Card>
         <CardHeader className="flex items-start justify-between space-y-0">
           <div>
@@ -853,7 +893,8 @@ function setOrderingTouched(questionId: string, value: boolean) {
           {/if}
         </Card>
       {/if}
-    </aside>
+      </aside>
+    {/if}
 
     <section class="flex-1 space-y-6">
       {#if parseErrors.length > 0}
@@ -871,7 +912,7 @@ function setOrderingTouched(questionId: string, value: boolean) {
         <Card>
           <CardHeader>
             <CardTitle>Welcome</CardTitle>
-            <CardDescription>Use the panel on the left to load a JSON assessment.</CardDescription>
+            <CardDescription>Use the sidebar to load a JSON assessment.</CardDescription>
           </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>
