@@ -301,7 +301,11 @@ function resetState(
     }
   }, 1000);
   if (source?.name) {
-    touchRecentFile(source.name, source.content).then(async () => {
+    const meta = {
+      title: data.meta.title,
+      questionCount: data.questions.length,
+    };
+    touchRecentFile(source.name, source.content, meta).then(async () => {
       recentFiles = await getRecentFiles();
     });
   }
@@ -944,7 +948,20 @@ function setOrderingTouched(questionId: string, value: boolean) {
                       on:click={() => loadRecentAssessment(file)}
                       title={`Load ${file.name}`}
                     >
-                      <span class="font-medium">{file.name}</span>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="line-clamp-1 font-medium">
+                          {file.meta?.title ?? file.name}
+                        </span>
+                        {#if file.meta?.questionCount != null}
+                          <span class="text-xs text-muted-foreground">
+                            {file.meta.questionCount}
+                            {file.meta.questionCount === 1
+                              ? " question"
+                              : " questions"}
+                          </span>
+                        {/if}
+                      </div>
+                      <span class="line-clamp-1 text-xs text-muted-foreground">{file.name}</span>
                       <span class="text-xs text-muted-foreground">{formatter.format(new Date(file.lastOpened))}</span>
                     </button>
                   </li>

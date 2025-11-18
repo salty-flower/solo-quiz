@@ -102,6 +102,8 @@ const markdown = new MarkdownIt({
   breaks: true,
 });
 
+markdown.disable("replacements");
+
 export function renderWithKatex(input: string): string {
   const tokens = tokenizeMath(input);
   const placeholders = new Map<string, string>();

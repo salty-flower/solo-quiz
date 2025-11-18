@@ -13,6 +13,12 @@ export interface RecentFileEntry {
    * include this field, so callers should handle `undefined` gracefully.
    */
   data?: string;
+  meta?: RecentFileMeta;
+}
+
+export interface RecentFileMeta {
+  title?: string;
+  questionCount?: number;
 }
 
 interface SoloQuizDB extends DBSchema {
@@ -68,7 +74,13 @@ function isRecentEntry(value: unknown): value is RecentFileEntry {
     typeof (value as RecentFileEntry).name === "string" &&
     typeof (value as RecentFileEntry).lastOpened === "number" &&
     ((value as RecentFileEntry).data === undefined ||
-      typeof (value as RecentFileEntry).data === "string")
+      typeof (value as RecentFileEntry).data === "string") &&
+    ((value as RecentFileEntry).meta === undefined ||
+      (typeof (value as RecentFileEntry).meta === "object" &&
+        ((value as RecentFileEntry).meta?.title === undefined ||
+          typeof (value as RecentFileEntry).meta?.title === "string") &&
+        ((value as RecentFileEntry).meta?.questionCount === undefined ||
+          typeof (value as RecentFileEntry).meta?.questionCount === "number")))
   );
 }
 
@@ -157,6 +169,7 @@ function mergeEntry(
   const merged: RecentFileEntry = {
     ...entry,
     data: entry.data ?? existing?.data,
+    meta: entry.meta ?? existing?.meta,
   };
   const filtered = list.filter((item) => item.name !== entry.name);
   return sortRecents([merged, ...filtered]);
@@ -186,8 +199,9 @@ export async function getRecentFiles(limit = 10): Promise<RecentFileEntry[]> {
 export async function touchRecentFile(
   name: string,
   data?: string,
+  meta?: RecentFileMeta,
 ): Promise<void> {
-  const entry: RecentFileEntry = { name, lastOpened: Date.now(), data };
+  const entry: RecentFileEntry = { name, lastOpened: Date.now(), data, meta };
   const db = await getDb();
   if (!db) {
     const updated = mergeEntry(readLocalRecents(), entry);
