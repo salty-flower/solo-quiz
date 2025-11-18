@@ -359,9 +359,7 @@ async function loadRecentAssessment(entry: RecentFileEntry) {
     }
     resetState(result.data, { name: entry.name, content: entry.data });
   } catch (error) {
-    parseErrors = [
-      { path: entry.name, message: (error as Error).message },
-    ];
+    parseErrors = [{ path: entry.name, message: (error as Error).message }];
     assessment = null;
     questions = [];
   }
