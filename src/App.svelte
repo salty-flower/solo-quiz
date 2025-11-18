@@ -1,5 +1,7 @@
 <script lang="ts">
 import { onDestroy, onMount, tick } from "svelte";
+import { slide } from "svelte/transition";
+import { Download, Moon, PanelLeft, PanelRight, Sun } from "lucide-svelte";
 import Button from "./lib/components/ui/Button.svelte";
 import {
   Card,
@@ -589,8 +591,8 @@ function exportJsonSummary() {
   URL.revokeObjectURL(url);
 }
 
-function toggleTheme(event: CustomEvent<boolean>) {
-  theme = event.detail ? "dark" : "light";
+function toggleTheme() {
+  theme = theme === "dark" ? "light" : "dark";
 }
 
 async function copySubjectivePrompt(result: QuestionResult) {
@@ -721,12 +723,18 @@ function setOrderingTouched(questionId: string, value: boolean) {
       <div class="flex flex-wrap items-center gap-3 sm:justify-end">
         <Button
           variant="outline"
-          size="sm"
+          size="icon"
           class="h-9"
-          aria-pressed={!sidebarVisible}
+          aria-pressed={sidebarVisible}
+          title={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
           on:click={toggleSidebar}
         >
-          {sidebarVisible ? "Hide sidebar" : "Show sidebar"}
+          {#if sidebarVisible}
+            <PanelLeft class="h-4 w-4" aria-hidden="true" />
+          {:else}
+            <PanelRight class="h-4 w-4" aria-hidden="true" />
+          {/if}
+          <span class="sr-only">{sidebarVisible ? "Hide sidebar" : "Show sidebar"}</span>
         </Button>
         {#if assessment}
           <div class="rounded-md border px-3 py-1 text-sm">
@@ -738,17 +746,30 @@ function setOrderingTouched(questionId: string, value: boolean) {
             <p class="mt-1 text-xs text-muted-foreground">{answeredCount} / {totalQuestions} answered</p>
           </div>
         {/if}
-        <div class="flex items-center gap-2 text-sm">
-          <span>Dark mode</span>
-          <Switch checked={theme === "dark"} on:change={toggleTheme} label="Toggle theme" />
-        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="h-9"
+          aria-pressed={theme === "dark"}
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          on:click={toggleTheme}
+        >
+          {#if theme === "dark"}
+            <Moon class="h-4 w-4" aria-hidden="true" />
+          {:else}
+            <Sun class="h-4 w-4" aria-hidden="true" />
+          {/if}
+          <span class="sr-only">
+            {theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          </span>
+        </Button>
       </div>
     </div>
   </header>
 
   <main class={`mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 ${sidebarVisible ? "lg:flex-row" : ""}`}>
     {#if sidebarVisible}
-      <aside class="w-full space-y-4 lg:w-64">
+      <aside class="w-full space-y-4 lg:w-64" transition:slide={{ duration: 200 }}>
       <Card>
         <CardHeader className="flex items-start justify-between space-y-0">
           <div>
@@ -797,20 +818,19 @@ function setOrderingTouched(questionId: string, value: boolean) {
             </label>
             <Separator />
             <div class="space-y-2">
-              <p class="text-sm font-medium">Download an example assessment</p>
+              <p class="text-sm font-medium">Example assessments</p>
               {#each exampleAssessments as example}
                 <div class="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
-                  <div class="space-y-1">
-                    <p class="font-medium">{example.data.meta.title}</p>
-                    <p class="text-xs text-muted-foreground">{example.description}</p>
-                  </div>
+                  <p class="font-medium">{example.data.meta.title}</p>
                   <Button
-                    size="sm"
+                    size="icon"
                     variant="outline"
                     class="ml-auto"
+                    title={`Download ${example.data.meta.title}`}
                     on:click={() => downloadExampleAssessment(example.id)}
                   >
-                    Download
+                    <Download class="h-4 w-4" aria-hidden="true" />
+                    <span class="sr-only">Download {example.data.meta.title}</span>
                   </Button>
                 </div>
               {/each}

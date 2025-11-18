@@ -17,6 +17,9 @@ importers:
       katex:
         specifier: ^0.16.25
         version: 0.16.25
+      lucide-svelte:
+        specifier: ^0.554.0
+        version: 0.554.0(svelte@5.41.2)
       shadcn-svelte:
         specifier: ^1.0.9
         version: 1.0.9
@@ -937,6 +940,11 @@ packages:
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
+
+  lucide-svelte@0.554.0:
+    resolution: {integrity: sha512-LLcpHi3SuKup0nVD1kKqo8FDZnjXJp48uST26GGh8Jcyrxqk5gmgpnvKmHsHox674UL3cPS1DCul/wFL7ybGqg==}
+    peerDependencies:
+      svelte: ^3 || ^4 || ^5.0.0-next.42
 
   magic-string@0.30.19:
     resolution: {integrity: sha512-2N21sPY9Ws53PZvsEpVtNuSW+ScYbQdp4b9qUaL+9QkHUrGFKo56Lg9Emg5s9V/qrtNBmiR01sYhUOwu3H+VOw==}
@@ -1962,6 +1970,10 @@ snapshots:
   locate-character@3.0.0: {}
 
   lru-cache@10.4.3: {}
+
+  lucide-svelte@0.554.0(svelte@5.41.2):
+    dependencies:
+      svelte: 5.41.2
 
   magic-string@0.30.19:
     dependencies:
