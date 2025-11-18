@@ -21,6 +21,7 @@
     "idb": "^8.0.1",
     "katex": "^0.16.25",
     "lucide-svelte": "^0.554.0",
+    "markdown-it": "^14.1.0",
     "shadcn-svelte": "^1.0.9",
     "svelte": "^5.39.6",
     "zod": "^3.23.8"
@@ -31,6 +32,7 @@
     "@tailwindcss/forms": "^0.5.9",
     "@tsconfig/svelte": "^5.0.5",
     "@types/katex": "^0.16.7",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.6.0",
     "autoprefixer": "^10.4.20",
     "cross-env": "^7.0.3",
