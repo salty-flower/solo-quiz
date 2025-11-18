@@ -5,15 +5,12 @@ import sampleAssessmentJson from "../../examples/sample-assessment.json" assert 
 
 export type ExampleAssessment = {
   id: string;
-  description: string;
   data: Assessment;
 };
 
 const SAMPLE_ASSESSMENTS: ExampleAssessment[] = [
   {
     id: "sample-stem",
-    description:
-      "Demonstrates every supported question type including math rendering.",
     data: sampleAssessmentJson as Assessment,
   },
 ];
