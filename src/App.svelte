@@ -33,6 +33,10 @@ import {
   type RecentFileEntry,
 } from "./lib/storage";
 import {
+  findExampleAssessment,
+  getExampleAssessments,
+} from "./lib/example-assessments";
+import {
   buildCsv,
   downloadCsv,
   type CsvQuestionResult,
@@ -51,128 +55,6 @@ const formatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "short",
   timeStyle: "short",
 });
-
-const EXAMPLE_ASSESSMENTS: {
-  id: string;
-  description: string;
-  data: Assessment;
-}[] = [
-  {
-    id: "sample-stem",
-    description:
-      "Demonstrates every supported question type including math rendering.",
-    data: {
-      schemaVersion: "1.0",
-      meta: {
-        title: "Sample STEM Quiz",
-        description:
-          "Demonstrates every supported question type including math rendering.",
-        shuffleQuestions: true,
-        timeLimitSec: 600,
-      },
-      questions: [
-        {
-          id: "q1",
-          type: "single",
-          text: "What is the derivative of $x^2$?",
-          options: [
-            {
-              id: "a",
-              label: "$2x$",
-              explanation: "d/dx of $x^n$ is $nx^{n-1}$.",
-            },
-            { id: "b", label: "$x$" },
-            { id: "c", label: "$x^3$" },
-          ],
-          correct: "a",
-          weight: 2,
-          feedback: {
-            correct: "Great! The power rule applies here.",
-            incorrect:
-              "Remember the power rule: multiply by the exponent and subtract one.",
-          },
-          tags: ["calculus"],
-        },
-        {
-          id: "q2",
-          type: "multi",
-          text: "Select all prime numbers.",
-          options: [
-            { id: "a", label: "2" },
-            { id: "b", label: "4" },
-            { id: "c", label: "5" },
-            { id: "d", label: "9" },
-          ],
-          correct: ["a", "c"],
-          tags: ["number theory"],
-          weight: 1,
-          feedback: {
-            correct: "2 and 5 are prime numbers.",
-            incorrect: "Only numbers divisible by 1 and themselves are prime.",
-          },
-        },
-        {
-          id: "q3",
-          type: "fitb",
-          text: "Fill in the blank: The chemical symbol for water is _____.",
-          accept: ["H2O", { pattern: "^h\\s*2\\s*o$", flags: "i" }],
-          normalize: "lower",
-          tags: ["chemistry"],
-          feedback: {
-            correct: "Correct!",
-            incorrect: "Water is H₂O.",
-          },
-        },
-        {
-          id: "q4",
-          type: "numeric",
-          text: "How many degrees are there in $\\pi$ radians?",
-          correct: 180,
-          tolerance: 0,
-          weight: 1.5,
-          tags: ["trigonometry"],
-        },
-        {
-          id: "q5",
-          type: "ordering",
-          text: "Arrange the planets from the Sun outward (using the first four planets).",
-          items: ["Earth", "Mercury", "Mars", "Venus"],
-          correctOrder: ["Mercury", "Venus", "Earth", "Mars"],
-          weight: 1,
-          tags: ["astronomy"],
-        },
-        {
-          id: "q6",
-          type: "subjective",
-          text: "In two to three sentences, explain why conservation of energy is useful when solving mechanics problems.",
-          rubrics: [
-            {
-              title: "States the principle",
-              description:
-                "Mentions that the total energy of an isolated system remains constant or that energy cannot be created or destroyed.",
-            },
-            {
-              title: "Connects to problem solving",
-              description:
-                "Explains how the principle simplifies calculations or reduces the number of unknowns in mechanics scenarios.",
-            },
-            {
-              title: "Clarity",
-              description:
-                "Provides a coherent explanation that is understandable to another student.",
-            },
-          ],
-          weight: 3,
-          tags: ["physics", "reasoning"],
-          feedback: {
-            incorrect:
-              "A human or LLM grader should review this response using the provided rubrics.",
-          },
-        },
-      ],
-    },
-  },
-];
 
 let fileInput: HTMLInputElement | null = null;
 let dropActive = false;
@@ -212,6 +94,7 @@ const DEFAULT_PANEL_VISIBILITY: PanelVisibility = {
   questions: false,
 };
 let panelVisibility: PanelVisibility = { ...DEFAULT_PANEL_VISIBILITY };
+const exampleAssessments = getExampleAssessments();
 
 const SYSTEM_PREFERS_DARK = () =>
   typeof window !== "undefined" &&
@@ -579,7 +462,7 @@ function sanitizeFilename(value: string): string {
 }
 
 function downloadExampleAssessment(id: string) {
-  const example = EXAMPLE_ASSESSMENTS.find((entry) => entry.id === id);
+  const example = findExampleAssessment(id);
   if (!example) return;
 
   const blob = new Blob([`${JSON.stringify(example.data, null, 2)}\n`], {
@@ -875,7 +758,7 @@ function setOrderingTouched(questionId: string, value: boolean) {
             <Separator />
             <div class="space-y-2">
               <p class="text-sm font-medium">Download an example assessment</p>
-              {#each EXAMPLE_ASSESSMENTS as example}
+              {#each exampleAssessments as example}
                 <div class="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
                   <div class="space-y-1">
                     <p class="font-medium">{example.data.meta.title}</p>
