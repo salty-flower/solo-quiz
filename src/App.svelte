@@ -57,6 +57,7 @@ import { preferences } from "./lib/stores/preferences";
 import { quiz } from "./lib/stores/quiz";
 import ReviewPage from "./lib/review/ReviewPage.svelte";
 import { llm } from "./lib/stores/llm";
+import { getAttempt } from "./lib/stores/attempts";
 import {
   getReviewPath,
   HOME_PATH,
@@ -186,6 +187,10 @@ function openReviewPage() {
 }
 
 function closeReviewPage() {
+  if (reviewAttemptId && !getAttempt(reviewAttemptId)) {
+    navigate("/");
+    return;
+  }
   navigate(HOME_PATH);
 }
 

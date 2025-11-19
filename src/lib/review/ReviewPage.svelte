@@ -17,7 +17,7 @@ import { llm } from "../stores/llm";
 
 export let attemptId: string;
 
-  const dispatch = createEventDispatcher<{ close: undefined }>();
+const dispatch = createEventDispatcher<{ close: undefined }>();
 
 const formatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
