@@ -182,8 +182,7 @@ function parseReviewPath(path: string): string | null {
   if (hashMatch) {
     return decodeURIComponent(hashMatch[1]);
   }
-  const pathMatch = /\/review\/([^/]+)$/.exec(path);
-  return pathMatch ? decodeURIComponent(pathMatch[1]) : null;
+  return null;
 }
 
 function openReviewPage() {

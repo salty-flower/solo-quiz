@@ -1,6 +1,5 @@
 import { writable } from "svelte/store";
 
-const REVIEW_SEGMENT = "/review/";
 const REVIEW_HASH = "#review/";
 
 function getCurrentPathname(): string {
@@ -19,21 +18,12 @@ const initialPath = getCurrentPathname();
 const initialRoute = getCurrentRoute();
 
 function isReviewPath(value: string | null | undefined): value is string {
-  return (
-    typeof value === "string" &&
-    (value.includes(REVIEW_SEGMENT) || value.includes(REVIEW_HASH))
-  );
+  return typeof value === "string" && value.includes(REVIEW_HASH);
 }
 
 function deriveBasePath(pathname: string | null | undefined): string {
   if (!pathname) return "/";
-  if (pathname === "/") return pathname;
-  const reviewIndex = pathname.indexOf(REVIEW_SEGMENT);
-  if (reviewIndex >= 0) {
-    const prefix = pathname.slice(0, reviewIndex);
-    return prefix || "/";
-  }
-  return pathname;
+  return pathname === "" ? "/" : pathname;
 }
 
 let homePath =
