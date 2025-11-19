@@ -21,6 +21,7 @@ export interface BaseQuestionResult {
   correctAnswer: string;
   feedback?: string;
   status: ResultStatus;
+  selectedOptions?: string[];
 }
 
 export interface DeterministicQuestionResult extends BaseQuestionResult {
@@ -102,11 +103,13 @@ export function evaluateQuestion(
 
   let isCorrect = false;
   let earned = 0;
+  let selectedOptions: string[] | undefined;
 
   switch (question.type) {
     case "single": {
       const single = question as SingleQuestion;
       const selected = typeof value === "string" ? value : "";
+      selectedOptions = selected ? [selected] : [];
       userAnswer = renderOptionLabels(single, selected ? [selected] : []);
       correctAnswer = renderOptionLabels(single, [single.correct]);
       isCorrect = selected === single.correct;
@@ -115,6 +118,7 @@ export function evaluateQuestion(
     case "multi": {
       const multi = question as MultiQuestion;
       const selected = Array.isArray(value) ? (value as string[]) : [];
+      selectedOptions = [...selected];
       userAnswer = renderOptionLabels(multi, selected);
       correctAnswer = renderOptionLabels(multi, multi.correct);
       const normalizedSelected = [...selected].sort();
@@ -197,6 +201,7 @@ export function evaluateQuestion(
     userAnswer,
     correctAnswer,
     feedback,
+    selectedOptions,
   };
 }
 
