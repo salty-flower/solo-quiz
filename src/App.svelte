@@ -511,7 +511,9 @@ function resetOrdering(question: OrderingQuestion) {
           </div>
           <div class="w-40">
             <Progress value={$progressValue} />
-            <p class="mt-1 text-xs text-muted-foreground">{answeredCount} / {totalQuestions} answered</p>
+            <p class="mt-1 text-xs text-muted-foreground">
+              {$answeredCount} / {$totalQuestions} answered
+            </p>
           </div>
         {/if}
         <Button
