@@ -177,8 +177,13 @@ function formatTime(sec: number): string {
 }
 
 function parseReviewPath(path: string): string | null {
-  const match = /^\/review\/([^/]+)$/.exec(path);
-  return match ? decodeURIComponent(match[1]) : null;
+  if (!path) return null;
+  const hashMatch = /#review\/([^/?#]+)/.exec(path);
+  if (hashMatch) {
+    return decodeURIComponent(hashMatch[1]);
+  }
+  const pathMatch = /\/review\/([^/]+)$/.exec(path);
+  return pathMatch ? decodeURIComponent(pathMatch[1]) : null;
 }
 
 function openReviewPage() {

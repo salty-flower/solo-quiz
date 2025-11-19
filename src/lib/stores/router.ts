@@ -1,12 +1,28 @@
 import { writable } from "svelte/store";
 
 const REVIEW_SEGMENT = "/review/";
+const REVIEW_HASH = "#review/";
 
-const initialPath =
-  typeof window !== "undefined" ? window.location.pathname : "/";
+function getCurrentPathname(): string {
+  if (typeof window === "undefined") return "/";
+  return window.location.pathname || "/";
+}
+
+function getCurrentRoute(): string {
+  if (typeof window === "undefined") return "/";
+  const pathname = getCurrentPathname();
+  const hash = window.location.hash || "";
+  return `${pathname}${hash}`;
+}
+
+const initialPath = getCurrentPathname();
+const initialRoute = getCurrentRoute();
 
 function isReviewPath(value: string | null | undefined): value is string {
-  return typeof value === "string" && value.includes(REVIEW_SEGMENT);
+  return (
+    typeof value === "string" &&
+    (value.includes(REVIEW_SEGMENT) || value.includes(REVIEW_HASH))
+  );
 }
 
 function deriveBasePath(pathname: string | null | undefined): string {
@@ -20,49 +36,55 @@ function deriveBasePath(pathname: string | null | undefined): string {
   return pathname;
 }
 
-function trimTrailingSlash(value: string): string {
-  if (value === "/") return value;
-  return value.endsWith("/") ? value.slice(0, -1) : value;
+let homePath =
+  initialPath && !isReviewPath(initialRoute)
+    ? initialPath
+    : deriveBasePath(initialPath);
+
+const path = writable(initialRoute || "/");
+
+function updateFromLocation() {
+  if (typeof window === "undefined") return;
+  const nextRoute = getCurrentRoute();
+  path.set(nextRoute);
+  if (!isReviewPath(nextRoute)) {
+    const nextPath = getCurrentPathname();
+    homePath = nextPath;
+  }
 }
 
-let basePath = deriveBasePath(initialPath);
-
-let homePath =
-  initialPath && !isReviewPath(initialPath) ? initialPath : basePath;
-
-const path = writable(initialPath || "/");
-
 if (typeof window !== "undefined") {
-  window.addEventListener("popstate", () => {
-    const nextPath = window.location.pathname || "/";
-    path.set(nextPath);
-    if (!isReviewPath(nextPath)) {
-      homePath = nextPath;
-      basePath = deriveBasePath(nextPath);
-    }
-  });
+  window.addEventListener("popstate", updateFromLocation);
+  window.addEventListener("hashchange", updateFromLocation);
 }
 
 export const routePath = {
   subscribe: path.subscribe,
 };
 
+function stripHash(value: string): string {
+  if (!value) return "/";
+  const hashIndex = value.indexOf("#");
+  if (hashIndex < 0) return value;
+  return hashIndex === 0 ? "/" : value.slice(0, hashIndex);
+}
+
 export function navigate(to: string) {
-  if (typeof window === "undefined") return;
-  if (window.location.pathname === to) return;
-  window.history.pushState({}, "", to);
-  path.set(to);
-  if (!isReviewPath(to)) {
-    homePath = to || "/";
-    basePath = deriveBasePath(homePath);
+  if (typeof window === "undefined" || !to) return;
+  const destination = to.startsWith("#") ? `${getCurrentPathname()}${to}` : to;
+  if (getCurrentRoute() === destination) return;
+  window.history.pushState({}, "", destination);
+  const current = getCurrentRoute();
+  path.set(current);
+  if (!isReviewPath(current)) {
+    const nextPath = stripHash(destination);
+    homePath = nextPath || "/";
   }
 }
 
 export function getReviewPath(attemptId: string): string {
   const encoded = encodeURIComponent(attemptId);
-  const normalizedBase = trimTrailingSlash(basePath);
-  const prefix = normalizedBase === "/" ? "" : normalizedBase;
-  return `${prefix}/review/${encoded}`;
+  return `${REVIEW_HASH}${encoded}`;
 }
 
 export function getHomePath(): string {
