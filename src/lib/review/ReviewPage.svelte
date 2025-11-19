@@ -61,6 +61,8 @@ onDestroy(() => {
     window.clearTimeout(promptCopyTimeout);
     promptCopyTimeout = null;
   }
+  setCopiedPromptQuestionId(null);
+  setPromptCopyError(null);
 });
 
 function closeReview() {
