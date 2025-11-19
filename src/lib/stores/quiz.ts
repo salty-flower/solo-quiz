@@ -1,9 +1,5 @@
 import { get, derived, writable } from "svelte/store";
-import {
-  parseAssessment,
-  type Assessment,
-  type Question,
-} from "../schema";
+import { parseAssessment, type Assessment, type Question } from "../schema";
 import {
   clearRecentFiles,
   getRecentFiles,
@@ -25,7 +21,10 @@ function shuffle<T>(array: T[]): T[] {
   return copy;
 }
 
-function isAnswered(question: Question, value: AnswerValue | undefined): boolean {
+function isAnswered(
+  question: Question,
+  value: AnswerValue | undefined,
+): boolean {
   if (value == null) return false;
   if (question.type === "ordering") {
     const arr = value as string[];
@@ -57,8 +56,9 @@ function createQuizStore() {
   const requireAllAnswered = writable(false);
   const recentFiles = writable<RecentFileEntry[]>([]);
 
-  const answeredCount = derived(touchedQuestions, ($touchedQuestions) =>
-    $touchedQuestions.size,
+  const answeredCount = derived(
+    touchedQuestions,
+    ($touchedQuestions) => $touchedQuestions.size,
   );
   const totalQuestions = derived(questions, ($questions) => $questions.length);
   const currentQuestion = derived(
@@ -68,9 +68,12 @@ function createQuizStore() {
   const currentResult = derived(
     [submission, currentIndex],
     ([$submission, $currentIndex]) =>
-      $submission ? $submission.results[$currentIndex] ?? null : null,
+      $submission ? ($submission.results[$currentIndex] ?? null) : null,
   );
-  const hasAnyAnswer = derived(answeredCount, ($answeredCount) => $answeredCount > 0);
+  const hasAnyAnswer = derived(
+    answeredCount,
+    ($answeredCount) => $answeredCount > 0,
+  );
   const submitDisabled = derived(
     [
       assessment,
@@ -119,7 +122,9 @@ function createQuizStore() {
     const result: Record<string, AnswerValue> = {};
     for (const question of list) {
       if (question.type === "multi" || question.type === "ordering") {
-        result[question.id] = [...(question.type === "ordering" ? question.items : [])];
+        result[question.id] = [
+          ...(question.type === "ordering" ? question.items : []),
+        ];
       } else {
         result[question.id] = "";
       }
@@ -164,7 +169,10 @@ function createQuizStore() {
     }, 1000);
   }
 
-  async function loadAssessment(data: Assessment, source?: { name: string; content?: string }) {
+  async function loadAssessment(
+    data: Assessment,
+    source?: { name: string; content?: string },
+  ) {
     applyAssessment(data);
     if (source?.name) {
       const meta = {
@@ -217,9 +225,14 @@ function createQuizStore() {
         questions.set([]);
         return;
       }
-      await loadAssessment(result.data, { name: entry.name, content: entry.data });
+      await loadAssessment(result.data, {
+        name: entry.name,
+        content: entry.data,
+      });
     } catch (error) {
-      parseErrors.set([{ path: entry.name, message: (error as Error).message }]);
+      parseErrors.set([
+        { path: entry.name, message: (error as Error).message },
+      ]);
       assessment.set(null);
       questions.set([]);
     }
