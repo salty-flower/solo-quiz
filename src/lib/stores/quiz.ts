@@ -11,6 +11,8 @@ import {
   type AnswerValue,
   type SubmissionSummary,
 } from "../results";
+import { registerAttempt } from "./attempts";
+import { getReviewPath, navigate } from "./router";
 
 function shuffle<T>(array: T[]): T[] {
   const copy = [...array];
@@ -52,7 +54,6 @@ function createQuizStore() {
   const timeRemaining = writable<number | null>(null);
   const submitted = writable(false);
   const submission = writable<SubmissionSummary | null>(null);
-  const showResultDialog = writable(false);
   const requireAllAnswered = writable(false);
   const recentFiles = writable<RecentFileEntry[]>([]);
 
@@ -147,7 +148,6 @@ function createQuizStore() {
     parseErrors.set([]);
     submitted.set(false);
     submission.set(null);
-    showResultDialog.set(false);
     startedAt.set(new Date());
     elapsedSec.set(0);
     const limit = data.meta.timeLimitSec ?? null;
@@ -287,7 +287,8 @@ function createQuizStore() {
       autoSubmitted: auto,
     });
     submission.set(summary);
-    showResultDialog.set(true);
+    registerAttempt(summary);
+    navigate(getReviewPath(summary.id));
   }
 
   function resetAssessment() {
@@ -319,7 +320,6 @@ function createQuizStore() {
     timeRemaining,
     submitted,
     submission,
-    showResultDialog,
     requireAllAnswered,
     recentFiles,
     answeredCount,

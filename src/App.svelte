@@ -23,7 +23,6 @@ import {
 import Separator from "./lib/components/ui/Separator.svelte";
 import Progress from "./lib/components/ui/Progress.svelte";
 import Switch from "./lib/components/ui/Switch.svelte";
-import Dialog from "./lib/components/ui/Dialog.svelte";
 import Alert from "./lib/components/ui/Alert.svelte";
 import { renderWithKatex } from "./lib/katex";
 import {
@@ -56,7 +55,14 @@ import {
 } from "./lib/results";
 import { preferences } from "./lib/stores/preferences";
 import { quiz } from "./lib/stores/quiz";
+import ReviewPage from "./lib/review/ReviewPage.svelte";
 import { llm } from "./lib/stores/llm";
+import {
+  getReviewPath,
+  HOME_PATH,
+  navigate,
+  routePath,
+} from "./lib/stores/router";
 
 const formatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "short",
@@ -81,8 +87,8 @@ let timeLimitSec: number | null = null;
 let timeRemaining: number | null = null;
 let submitted = false;
 let submission: SubmissionSummary | null = null;
-let showResultDialog = false;
 let submitDisabledValue = false;
+let reviewAttemptId: string | null = null;
 const theme = preferences.theme;
 const panelVisibility = preferences.panelVisibility;
 const sidebarVisible = preferences.sidebarVisible;
@@ -102,7 +108,6 @@ const {
   timeRemaining: timeRemainingStore,
   submitted: submittedStore,
   submission: submissionStore,
-  showResultDialog: showResultDialogStore,
   requireAllAnswered,
   recentFiles,
   answeredCount,
@@ -122,20 +127,7 @@ const {
   clearHistory,
   teardown,
 } = quiz;
-const {
-  inputs: llmFeedbackInputs,
-  results: llmFeedbackResults,
-  errors: llmFeedbackErrors,
-  copiedPromptQuestionId,
-  promptCopyError,
-  reset: resetLlmState,
-  setInput: setLlmFeedbackInput,
-  applyFeedback: applyStoredLlmFeedback,
-  clearFeedback: clearStoredLlmFeedback,
-  setCopiedPromptQuestionId,
-  setPromptCopyError,
-} = llm;
-let promptCopyTimeout: number | null = null;
+const { reset: resetLlmState } = llm;
 const exampleAssessments = getExampleAssessments();
 
 onMount(async () => {
@@ -144,9 +136,6 @@ onMount(async () => {
 
 onDestroy(() => {
   teardown();
-  if (promptCopyTimeout) {
-    window.clearTimeout(promptCopyTimeout);
-  }
 });
 
 $: if (assessment) {
@@ -156,6 +145,7 @@ $: if (assessment) {
 $: if (submitted) {
   resetLlmState();
 }
+$: reviewAttemptId = parseReviewPath($routePath);
 $: requireAllAnsweredChecked = $requireAllAnswered;
 $: timeDisplay =
   timeRemaining !== null ? formatTime(timeRemaining) : formatTime(elapsedSec);
@@ -173,7 +163,6 @@ $: timeLimitSec = $timeLimitSecStore;
 $: timeRemaining = $timeRemainingStore;
 $: submitted = $submittedStore;
 $: submission = $submissionStore;
-$: showResultDialog = $showResultDialogStore;
 $: submitDisabledValue = $submitDisabled;
 
 function formatTime(sec: number): string {
@@ -184,6 +173,20 @@ function formatTime(sec: number): string {
     .toString()
     .padStart(2, "0");
   return `${minutes}:${seconds}`;
+}
+
+function parseReviewPath(path: string): string | null {
+  const match = /^\/review\/([^/]+)$/.exec(path);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function openReviewPage() {
+  if (!submission) return;
+  navigate(getReviewPath(submission.id));
+}
+
+function closeReviewPage() {
+  navigate(HOME_PATH);
 }
 
 function onFileInputChange(event: Event) {
@@ -400,57 +403,6 @@ function exportJsonSummary() {
   URL.revokeObjectURL(url);
 }
 
-async function copySubjectivePrompt(result: QuestionResult) {
-  if (promptCopyTimeout) {
-    window.clearTimeout(promptCopyTimeout);
-  }
-  setCopiedPromptQuestionId(result.question.id);
-  try {
-    if (!result.requiresManualGrading) {
-      throw new Error("Only subjective questions provide prompts.");
-    }
-    const prompt = buildSubjectivePrompt({
-      question: result.question,
-      userAnswer: result.userAnswer,
-      maxScore: result.max,
-    });
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(prompt);
-    } else {
-      const textarea = document.createElement("textarea");
-      textarea.value = prompt;
-      textarea.setAttribute("readonly", "");
-      textarea.style.position = "absolute";
-      textarea.style.left = "-9999px";
-      document.body.append(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-    }
-    setPromptCopyError(null);
-  } catch (error) {
-    setPromptCopyError(
-      error instanceof Error
-        ? error.message
-        : "Unable to copy prompt to clipboard.",
-    );
-  }
-  promptCopyTimeout = window.setTimeout(() => {
-    setCopiedPromptQuestionId(null);
-    setPromptCopyError(null);
-    promptCopyTimeout = null;
-  }, 3000);
-}
-
-function applyLlmFeedback(result: QuestionResult) {
-  if (!result.requiresManualGrading) return;
-  applyStoredLlmFeedback(result.question.id);
-}
-
-function clearLlmFeedback(questionId: string) {
-  clearStoredLlmFeedback(questionId);
-}
-
 function moveOrdering(
   question: OrderingQuestion,
   index: number,
@@ -477,6 +429,9 @@ function resetOrdering(question: OrderingQuestion) {
 
 <svelte:window on:dragover|preventDefault={onDragOver} on:drop={onDrop} />
 
+{#if reviewAttemptId}
+  <ReviewPage attemptId={reviewAttemptId} on:close={closeReviewPage} />
+{:else}
 <div class="min-h-screen bg-background text-foreground">
   <header class="border-b bg-card/30 backdrop-blur">
     <div class="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -814,11 +769,7 @@ function resetOrdering(question: OrderingQuestion) {
                 {/if}
               </div>
               <div class="ml-auto flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  on:click={() => showResultDialogStore.set(true)}
-                >
+                <Button size="sm" variant="outline" on:click={openReviewPage}>
                   View summary
                 </Button>
                 <Button size="sm" on:click={exportCsv}>Export results CSV</Button>
@@ -1052,198 +1003,5 @@ function resetOrdering(question: OrderingQuestion) {
     </section>
   </main>
 </div>
-
-{#if submission}
-  <Dialog
-    open={showResultDialog}
-    title="Quiz summary"
-    on:close={() => showResultDialogStore.set(false)}
-  >
-    <div class="space-y-3 text-sm">
-      <p>
-        <span class="font-semibold">Deterministic score:</span>
-        {" "}
-        {submission.deterministicEarned} / {submission.deterministicMax}
-        {" "}({submission.deterministicPercentage.toFixed(2)}%)
-      </p>
-      {#if submission.subjectiveMax > 0}
-        <p>
-          <span class="font-semibold">Pending subjective:</span>
-          {" "}
-          {submission.subjectiveMax} points across {submission.pendingSubjectiveCount}
-          {submission.pendingSubjectiveCount === 1 ? "question" : "questions"}.
-        </p>
-      {/if}
-      <p>
-        <span class="font-semibold">Started:</span> {formatter.format(submission.startedAt)}
-        <br />
-        <span class="font-semibold">Completed:</span> {formatter.format(submission.completedAt)}
-      </p>
-      <p>
-        <span class="font-semibold">Time used:</span> {formatTime(submission.elapsedSec)}
-        {#if submission.autoSubmitted}
-          — auto submitted when the timer expired.
-        {/if}
-      </p>
-      <Separator />
-      <div class="max-h-80 overflow-y-auto pr-2 text-xs">
-        <table class="w-full table-fixed border-collapse text-left">
-          <thead class="sticky top-0 bg-background">
-            <tr class="border-b">
-              <th class="w-12 py-2">#</th>
-              <th class="py-2">Question</th>
-              <th class="w-28 py-2">Your answer</th>
-              <th class="w-28 py-2">Reference</th>
-              <th class="w-20 py-2 text-center">Earned</th>
-              <th class="w-24 py-2 text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each submission.results as result, index}
-              {@const statusClass =
-                result.status === "correct"
-                  ? "text-green-600 dark:text-green-300"
-                  : result.status === "incorrect"
-                    ? "text-destructive"
-                    : "text-muted-foreground"}
-              {@const statusLabel =
-                result.status === "pending"
-                  ? "Pending review"
-                  : result.status === "correct"
-                    ? "Correct"
-                    : "Incorrect"}
-              <tr class="border-b align-top">
-                <td class="py-2">{index + 1}</td>
-                <td class="py-2">
-                  <div class="font-medium">
-                    {@html renderWithKatex(result.question.text)}
-                  </div>
-                  {#if result.feedback}
-                    <p class={`mt-1 text-xs ${statusClass}`}>
-                      {@html renderWithKatex(result.feedback)}
-                    </p>
-                  {/if}
-                  {#if result.requiresManualGrading}
-                    {@const questionId = result.question.id}
-                    {@const feedbackInput = $llmFeedbackInputs[questionId] ?? ""}
-                    {@const feedbackError = $llmFeedbackErrors[questionId]}
-                    {@const feedback = $llmFeedbackResults[questionId]}
-                    <div class="mt-2 space-y-3">
-                      <div class="rounded-md border border-dashed bg-muted/30 p-2 text-[0.7rem] text-muted-foreground">
-                        <p class="mb-1 font-semibold uppercase tracking-wide">Rubrics</p>
-                        <ul class="ml-4 list-disc space-y-1">
-                          {#each result.rubrics as rubric}
-                            <li>
-                              <span class="font-medium text-foreground">
-                                {@html renderWithKatex(rubric.title)}
-                              </span>
-                              <span class="ml-1">
-                                {@html renderWithKatex(rubric.description)}
-                              </span>
-                            </li>
-                          {/each}
-                        </ul>
-                      </div>
-                      <div class="flex flex-wrap items-center gap-2">
-                        <Button size="sm" variant="outline" on:click={() => copySubjectivePrompt(result)}>
-                          Copy LLM prompt
-                        </Button>
-                        {#if $copiedPromptQuestionId === questionId && !$promptCopyError}
-                          <span class="text-xs text-muted-foreground">Copied!</span>
-                        {/if}
-                        {#if $copiedPromptQuestionId === questionId && $promptCopyError}
-                          <span class="text-xs text-destructive">{$promptCopyError}</span>
-                        {/if}
-                      </div>
-                      <div class="space-y-2 rounded-md border border-dashed bg-muted/20 p-3">
-                        <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Paste LLM feedback JSON
-                        </p>
-                        <textarea
-                          class="h-24 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-[0.75rem] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          placeholder="Paste the model's JSON response here"
-                          value={feedbackInput}
-                          on:input={(event) =>
-                            setLlmFeedbackInput(
-                              questionId,
-                              (event.target as HTMLTextAreaElement).value,
-                            )}
-                        ></textarea>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <Button size="sm" on:click={() => applyLlmFeedback(result)}>
-                            Apply feedback
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            on:click={() => clearLlmFeedback(questionId)}
-                            disabled={!feedbackInput.trim() && !feedback && !feedbackError}
-                          >
-                            Clear
-                          </Button>
-                        </div>
-                        {#if feedbackError}
-                          <p class="text-[0.7rem] text-destructive">{feedbackError}</p>
-                        {:else if feedback}
-                          <div class="space-y-2 rounded-md border border-muted bg-background/70 p-2 text-[0.7rem]">
-                            <p>
-                              <span class="font-semibold">Verdict:</span> {feedback.verdict}
-                              <span class="ml-2 font-semibold">Score:</span>
-                              {feedback.score} / {feedback.maxScore}
-                            </p>
-                            <p>
-                              <span class="font-semibold">Feedback:</span>
-                              {" "}{feedback.feedback}
-                            </p>
-                            <div>
-                              <p class="font-semibold">Rubric breakdown:</p>
-                              <ul class="ml-4 list-disc space-y-1">
-                                {#each feedback.rubricBreakdown as entry}
-                                  <li>
-                                    <span class="font-medium">{entry.rubric}:</span>
-                                    {" "}{entry.comments}
-                                    <span class="ml-1 text-muted-foreground">
-                                      ({Math.round(entry.achievedFraction * 100)}%)
-                                    </span>
-                                  </li>
-                                {/each}
-                              </ul>
-                            </div>
-                            {#if feedback.improvements.length > 0}
-                              <div>
-                                <p class="font-semibold">Suggested improvements:</p>
-                                <ul class="ml-4 list-disc space-y-1">
-                                  {#each feedback.improvements as improvement}
-                                    <li>{improvement}</li>
-                                  {/each}
-                                </ul>
-                              </div>
-                            {/if}
-                          </div>
-                        {/if}
-                      </div>
-                    </div>
-                  {/if}
-                </td>
-                <td class="py-2 text-xs">
-                  <div>{@html renderWithKatex(result.userAnswer || "—")}</div>
-                </td>
-                <td class="py-2 text-xs">
-                  <div>{@html renderWithKatex(result.correctAnswer || "—")}</div>
-                </td>
-                <td class="py-2 text-center font-semibold">
-                  {result.requiresManualGrading
-                    ? `— / ${result.max}`
-                    : `${result.earned} / ${result.max}`}
-                </td>
-                <td class={`py-2 text-center text-xs font-semibold ${statusClass}`}>
-                  {statusLabel}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </Dialog>
 {/if}
+
