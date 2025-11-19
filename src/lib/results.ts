@@ -44,6 +44,7 @@ export type QuestionResult =
   | SubjectiveQuestionResult;
 
 export interface SubmissionSummary {
+  id: string;
   assessment: Assessment;
   results: QuestionResult[];
   deterministicEarned: number;
@@ -256,6 +257,7 @@ export function evaluateSubmission({
     : elapsedSec;
 
   return {
+    id: createAttemptId(),
     assessment,
     results,
     deterministicEarned,
@@ -268,6 +270,14 @@ export function evaluateSubmission({
     elapsedSec: derivedElapsed,
     autoSubmitted,
   };
+}
+
+function createAttemptId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  const random = Math.random().toString(36).slice(2, 10);
+  return `attempt-${Date.now()}-${random}`;
 }
 
 export function createSerializableQuestionResult(
