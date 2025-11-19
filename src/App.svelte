@@ -60,7 +60,7 @@ import { llm } from "./lib/stores/llm";
 import { getAttempt } from "./lib/stores/attempts";
 import {
   getReviewPath,
-  HOME_PATH,
+  getHomePath,
   navigate,
   routePath,
 } from "./lib/stores/router";
@@ -191,7 +191,7 @@ function closeReviewPage() {
     navigate("/");
     return;
   }
-  navigate(HOME_PATH);
+  navigate(getHomePath());
 }
 
 function onFileInputChange(event: Event) {
