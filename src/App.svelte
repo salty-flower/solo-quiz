@@ -27,7 +27,6 @@ import Dialog from "./lib/components/ui/Dialog.svelte";
 import Alert from "./lib/components/ui/Alert.svelte";
 import { renderWithKatex } from "./lib/katex";
 import {
-  llmFeedbackSchema,
   parseAssessment,
   questionWeight,
   type Assessment,
@@ -36,14 +35,8 @@ import {
   type MultiQuestion,
   type OrderingQuestion,
   type SubjectiveQuestion,
-  type LlmFeedback,
 } from "./lib/schema";
-import {
-  clearRecentFiles,
-  getRecentFiles,
-  touchRecentFile,
-  type RecentFileEntry,
-} from "./lib/storage";
+import { type RecentFileEntry } from "./lib/storage";
 import {
   findExampleAssessment,
   getExampleAssessments,
@@ -57,11 +50,13 @@ import {
 import { buildSubjectivePrompt } from "./lib/llm";
 import {
   createSerializableQuestionResult,
-  evaluateSubmission,
   type AnswerValue,
   type QuestionResult,
   type SubmissionSummary,
 } from "./lib/results";
+import { preferences } from "./lib/stores/preferences";
+import { quiz } from "./lib/stores/quiz";
+import { llm } from "./lib/stores/llm";
 
 const formatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "short",
@@ -70,171 +65,116 @@ const formatter = new Intl.DateTimeFormat(undefined, {
 
 let fileInput: HTMLInputElement | null = null;
 let dropActive = false;
-let recentFiles: RecentFileEntry[] = [];
+let questionContainer: HTMLDivElement | null = null;
+let requireAllAnsweredChecked = false;
 let assessment: Assessment | null = null;
 let questions: Question[] = [];
 let answers: Record<string, AnswerValue> = {};
 let touchedQuestions = new Set<string>();
+let orderingTouched = new Set<string>();
 let currentIndex = 0;
 let currentQuestion: Question | undefined = undefined;
 let currentResult: QuestionResult | null = null;
 let parseErrors: { path: string; message: string }[] = [];
-let startedAt: Date | null = null;
 let elapsedSec = 0;
-let timerId: number | null = null;
 let timeLimitSec: number | null = null;
 let timeRemaining: number | null = null;
 let submitted = false;
 let submission: SubmissionSummary | null = null;
 let showResultDialog = false;
-let requireAllAnswered = false;
-let questionContainer: HTMLDivElement | null = null;
-let theme: "light" | "dark" = "light";
-let orderingTouched = new Set<string>();
-let copiedPromptQuestionId: string | null = null;
-let promptCopyError: string | null = null;
+let submitDisabledValue = false;
+const theme = preferences.theme;
+const panelVisibility = preferences.panelVisibility;
+const sidebarVisible = preferences.sidebarVisible;
+const { togglePanel, toggleSidebar, cycleTheme } = preferences;
+const {
+  assessment: assessmentStore,
+  questions: questionsStore,
+  answers: answersStore,
+  touchedQuestions: touchedQuestionsStore,
+  orderingTouched: orderingTouchedStore,
+  currentIndex: currentIndexStore,
+  currentQuestion: currentQuestionStore,
+  currentResult: currentResultStore,
+  parseErrors: parseErrorsStore,
+  elapsedSec: elapsedSecStore,
+  timeLimitSec: timeLimitSecStore,
+  timeRemaining: timeRemainingStore,
+  submitted: submittedStore,
+  submission: submissionStore,
+  showResultDialog: showResultDialogStore,
+  requireAllAnswered,
+  recentFiles,
+  answeredCount,
+  totalQuestions,
+  hasAnyAnswer,
+  progressValue,
+  submitDisabled,
+  refreshRecentFiles,
+  handleFile,
+  loadRecentAssessment,
+  updateTouched,
+  setOrderingTouched,
+  setCurrentIndex,
+  setRequireAllAnswered,
+  submitQuiz,
+  resetAssessment,
+  clearHistory,
+  teardown,
+} = quiz;
+const {
+  inputs: llmFeedbackInputs,
+  results: llmFeedbackResults,
+  errors: llmFeedbackErrors,
+  copiedPromptQuestionId,
+  promptCopyError,
+  reset: resetLlmState,
+  setInput: setLlmFeedbackInput,
+  applyFeedback: applyStoredLlmFeedback,
+  clearFeedback: clearStoredLlmFeedback,
+  setCopiedPromptQuestionId,
+  setPromptCopyError,
+} = llm;
 let promptCopyTimeout: number | null = null;
-let llmFeedbackInputs: Record<string, string> = {};
-let llmFeedbackResults: Record<string, LlmFeedback | undefined> = {};
-let llmFeedbackErrors: Record<string, string | null> = {};
-type PanelKey = "assessment" | "recents" | "questions";
-type PanelVisibility = Record<PanelKey, boolean>;
-const PANEL_STORAGE_KEY = "solo-quiz-panel-visibility-v1";
-const SIDEBAR_STORAGE_KEY = "solo-quiz-sidebar-visible-v1";
-const DEFAULT_PANEL_VISIBILITY: PanelVisibility = {
-  assessment: false,
-  recents: false,
-  questions: false,
-};
-let panelVisibility: PanelVisibility = { ...DEFAULT_PANEL_VISIBILITY };
-let sidebarVisible = true;
 const exampleAssessments = getExampleAssessments();
 
-const SYSTEM_PREFERS_DARK = () =>
-  typeof window !== "undefined" &&
-  window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-function loadTheme() {
-  if (typeof localStorage === "undefined") return;
-  const stored = localStorage.getItem("solo-quiz-theme");
-  if (stored === "light" || stored === "dark") {
-    theme = stored;
-    return;
-  }
-  theme = SYSTEM_PREFERS_DARK() ? "dark" : "light";
-}
-
-function applyTheme() {
-  if (typeof document === "undefined") return;
-  document.documentElement.classList.remove("light", "dark");
-  document.documentElement.classList.add(theme);
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("solo-quiz-theme", theme);
-  }
-}
-
-function loadPanelVisibility(): PanelVisibility {
-  if (typeof localStorage === "undefined") {
-    return { ...DEFAULT_PANEL_VISIBILITY };
-  }
-
-  const stored = localStorage.getItem(PANEL_STORAGE_KEY);
-  if (!stored) {
-    return { ...DEFAULT_PANEL_VISIBILITY };
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as Partial<PanelVisibility>;
-    const result: PanelVisibility = { ...DEFAULT_PANEL_VISIBILITY };
-    for (const key of Object.keys(result) as PanelKey[]) {
-      if (typeof parsed[key] === "boolean") {
-        result[key] = parsed[key] as boolean;
-      }
-    }
-    return result;
-  } catch (error) {
-    console.warn("Unable to parse panel preferences; resetting", error);
-    localStorage.removeItem(PANEL_STORAGE_KEY);
-    return { ...DEFAULT_PANEL_VISIBILITY };
-  }
-}
-
-function savePanelVisibility(value: PanelVisibility) {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(value));
-  } catch (error) {
-    console.warn("Unable to store panel preferences", error);
-  }
-}
-
-function loadSidebarVisibility() {
-  if (typeof localStorage === "undefined") return true;
-  try {
-    const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
-    if (stored === null) return true;
-    return JSON.parse(stored) === true;
-  } catch (error) {
-    console.warn("Unable to parse sidebar preference; resetting", error);
-    localStorage.removeItem(SIDEBAR_STORAGE_KEY);
-    return true;
-  }
-}
-
-function saveSidebarVisibility(value: boolean) {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(value));
-  } catch (error) {
-    console.warn("Unable to store sidebar preference", error);
-  }
-}
-
-function togglePanel(key: PanelKey) {
-  panelVisibility = { ...panelVisibility, [key]: !panelVisibility[key] };
-}
-
-function toggleSidebar() {
-  sidebarVisible = !sidebarVisible;
-}
-
 onMount(async () => {
-  loadTheme();
-  applyTheme();
-  panelVisibility = loadPanelVisibility();
-  sidebarVisible = loadSidebarVisibility();
-  recentFiles = await getRecentFiles();
+  await refreshRecentFiles();
 });
 
-$: if (theme) applyTheme();
-$: savePanelVisibility(panelVisibility);
-$: saveSidebarVisibility(sidebarVisible);
-
 onDestroy(() => {
-  if (timerId) {
-    window.clearInterval(timerId);
-  }
+  teardown();
   if (promptCopyTimeout) {
     window.clearTimeout(promptCopyTimeout);
   }
 });
 
-$: answeredCount = [...touchedQuestions].length;
-$: totalQuestions = questions.length;
-$: currentQuestion = questions[currentIndex];
-$: currentResult = submission
-  ? (submission.results[currentIndex] ?? null)
-  : null;
-$: progressValue =
-  totalQuestions === 0 ? 0 : Math.round((answeredCount / totalQuestions) * 100);
-$: hasAnyAnswer = answeredCount > 0;
-$: submitDisabled =
-  !assessment ||
-  submitted ||
-  !hasAnyAnswer ||
-  (requireAllAnswered && answeredCount < totalQuestions);
+$: if (assessment) {
+  resetLlmState();
+}
+
+$: if (submitted) {
+  resetLlmState();
+}
+$: requireAllAnsweredChecked = $requireAllAnswered;
 $: timeDisplay =
   timeRemaining !== null ? formatTime(timeRemaining) : formatTime(elapsedSec);
+$: assessment = $assessmentStore;
+$: questions = $questionsStore;
+$: answers = $answersStore;
+$: touchedQuestions = $touchedQuestionsStore;
+$: orderingTouched = $orderingTouchedStore;
+$: currentIndex = $currentIndexStore;
+$: currentQuestion = $currentQuestionStore;
+$: currentResult = $currentResultStore;
+$: parseErrors = $parseErrorsStore;
+$: elapsedSec = $elapsedSecStore;
+$: timeLimitSec = $timeLimitSecStore;
+$: timeRemaining = $timeRemainingStore;
+$: submitted = $submittedStore;
+$: submission = $submissionStore;
+$: showResultDialog = $showResultDialogStore;
+$: submitDisabledValue = $submitDisabled;
 
 function formatTime(sec: number): string {
   const minutes = Math.floor(sec / 60)
@@ -244,129 +184,6 @@ function formatTime(sec: number): string {
     .toString()
     .padStart(2, "0");
   return `${minutes}:${seconds}`;
-}
-
-function resetState(
-  data: Assessment,
-  source?: { name: string; content?: string },
-) {
-  assessment = data;
-  const baseQuestions = data.questions;
-  questions = data.meta.shuffleQuestions
-    ? shuffle(baseQuestions)
-    : [...baseQuestions];
-  answers = {};
-  touchedQuestions = new Set();
-  orderingTouched = new Set();
-  copiedPromptQuestionId = null;
-  promptCopyError = null;
-  if (promptCopyTimeout) {
-    window.clearTimeout(promptCopyTimeout);
-    promptCopyTimeout = null;
-  }
-  llmFeedbackInputs = {};
-  llmFeedbackResults = {};
-  llmFeedbackErrors = {};
-  for (const question of questions) {
-    if (question.type === "multi" || question.type === "ordering") {
-      answers[question.id] = [
-        ...(question.type === "ordering" ? question.items : []),
-      ];
-    } else {
-      answers[question.id] = "";
-    }
-  }
-  touchedQuestions = new Set();
-  currentIndex = 0;
-  parseErrors = [];
-  submitted = false;
-  submission = null;
-  showResultDialog = false;
-  startedAt = new Date();
-  elapsedSec = 0;
-  timeLimitSec = data.meta.timeLimitSec ?? null;
-  timeRemaining = timeLimitSec;
-  if (timerId) {
-    window.clearInterval(timerId);
-  }
-  timerId = window.setInterval(() => {
-    if (!startedAt) return;
-    elapsedSec = Math.floor((Date.now() - startedAt.getTime()) / 1000);
-    if (timeLimitSec !== null) {
-      const remaining = Math.max(0, timeLimitSec - elapsedSec);
-      timeRemaining = remaining;
-      if (remaining === 0 && !submitted) {
-        submitQuiz(true);
-      }
-    }
-  }, 1000);
-  if (source?.name) {
-    const meta = {
-      title: data.meta.title,
-      questionCount: data.questions.length,
-    };
-    touchRecentFile(source.name, source.content, meta).then(async () => {
-      recentFiles = await getRecentFiles();
-    });
-  }
-}
-
-function shuffle<T>(array: T[]): T[] {
-  const copy = [...array];
-  for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
-async function handleFile(file: File) {
-  try {
-    const text = await file.text();
-    const raw = JSON.parse(text);
-    const result = parseAssessment(raw);
-    if (!result.ok) {
-      parseErrors = result.issues;
-      assessment = null;
-      questions = [];
-      return;
-    }
-    resetState(result.data, { name: file.name, content: text });
-  } catch (error) {
-    parseErrors = [{ path: "file", message: (error as Error).message }];
-    assessment = null;
-    questions = [];
-  }
-}
-
-async function loadRecentAssessment(entry: RecentFileEntry) {
-  if (!entry.data) {
-    parseErrors = [
-      {
-        path: entry.name,
-        message: "Cached data missing; please re-import the file.",
-      },
-    ];
-    assessment = null;
-    questions = [];
-    return;
-  }
-
-  try {
-    const raw = JSON.parse(entry.data);
-    const result = parseAssessment(raw);
-    if (!result.ok) {
-      parseErrors = result.issues;
-      assessment = null;
-      questions = [];
-      return;
-    }
-    resetState(result.data, { name: entry.name, content: entry.data });
-  } catch (error) {
-    parseErrors = [{ path: entry.name, message: (error as Error).message }];
-    assessment = null;
-    questions = [];
-  }
 }
 
 function onFileInputChange(event: Event) {
@@ -404,42 +221,6 @@ function handleDropzoneKey(event: KeyboardEvent) {
   }
 }
 
-function updateTouched(question: Question, value: AnswerValue) {
-  answers = { ...answers, [question.id]: value };
-  const answered = isAnswered(question, value);
-  const clone = new Set(touchedQuestions);
-  if (answered) {
-    clone.add(question.id);
-  } else {
-    clone.delete(question.id);
-  }
-  touchedQuestions = clone;
-}
-
-function isAnswered(
-  question: Question,
-  value: AnswerValue = answers[question.id],
-): boolean {
-  if (value == null) return false;
-  if (question.type === "ordering") {
-    if (!orderingTouched.has(question.id)) {
-      return false;
-    }
-    const arr = value as string[];
-    return arr.length > 0;
-  }
-  if (question.type === "multi") {
-    const arr = value as string[];
-    return arr.length > 0;
-  }
-  const str = String(value);
-  return str.trim().length > 0;
-}
-
-function arraysEqual(a: string[], b: string[]): boolean {
-  return a.length === b.length && a.every((val, index) => val === b[index]);
-}
-
 function questionNavStyles(question: Question, index: number): string {
   if (index === currentIndex) {
     return "border-primary bg-primary/10 text-primary";
@@ -468,57 +249,32 @@ function questionNavStyles(question: Question, index: number): string {
 
 async function navigateTo(index: number) {
   if (index < 0 || index >= questions.length) return;
-  currentIndex = index;
+  setCurrentIndex(index);
   await tick();
   questionContainer?.focus();
 }
 
-function submitQuiz(auto = false) {
-  if (!assessment || submitted) return;
-  submitted = true;
-  if (timerId) {
-    window.clearInterval(timerId);
-    timerId = null;
-  }
-  llmFeedbackInputs = {};
-  llmFeedbackResults = {};
-  llmFeedbackErrors = {};
-  const completedAt = new Date();
-  submission = evaluateSubmission({
-    assessment,
-    questions,
-    answers,
-    startedAt,
-    completedAt,
-    elapsedSec,
-    autoSubmitted: auto,
-  });
-  showResultDialog = true;
-}
-
-function resetAssessment() {
-  if (!assessment) return;
-  resetState(assessment);
-}
-
 function exportCsv() {
   if (!submission) return;
-  const serializable = submission.results.map((result, index) =>
-    createSerializableQuestionResult(result, index),
+  const serializable = submission.results.map(
+    (result: QuestionResult, index: number) =>
+      createSerializableQuestionResult(result, index),
   );
-  const rows: CsvQuestionResult[] = serializable.map((entry) => ({
-    questionNumber: entry.position,
-    questionId: entry.questionId,
-    questionText: entry.questionText,
-    type: entry.type,
-    weight: entry.weight,
-    tags: entry.tags,
-    userAnswer: entry.userAnswer,
-    correctAnswer: entry.correctAnswer,
-    earned: entry.earned,
-    max: entry.max,
-    result: entry.status,
-  }));
+  const rows: CsvQuestionResult[] = serializable.map(
+    (entry: ReturnType<typeof createSerializableQuestionResult>) => ({
+      questionNumber: entry.position,
+      questionId: entry.questionId,
+      questionText: entry.questionText,
+      type: entry.type,
+      weight: entry.weight,
+      tags: entry.tags,
+      userAnswer: entry.userAnswer,
+      correctAnswer: entry.correctAnswer,
+      earned: entry.earned,
+      max: entry.max,
+      result: entry.status,
+    }),
+  );
   const summary: CsvSummary = {
     assessmentTitle: submission.assessment.meta.title,
     deterministicScore: submission.deterministicEarned,
@@ -575,8 +331,9 @@ function exportAssessment() {
 function exportJsonSummary() {
   if (!submission) return;
   const summary = submission;
-  const serializable = summary.results.map((result, index) =>
-    createSerializableQuestionResult(result, index),
+  const serializable = summary.results.map(
+    (result: QuestionResult, index: number) =>
+      createSerializableQuestionResult(result, index),
   );
   const { assessment: assessed } = summary;
   const data = {
@@ -586,44 +343,49 @@ function exportJsonSummary() {
       timeLimitSec: assessed.meta.timeLimitSec ?? null,
     },
     deterministic: {
-      earned: submission.deterministicEarned,
-      max: submission.deterministicMax,
-      percentage: submission.deterministicPercentage,
+      earned: summary.deterministicEarned,
+      max: summary.deterministicMax,
+      percentage: summary.deterministicPercentage,
     },
     subjective: {
-      pendingCount: submission.pendingSubjectiveCount,
-      max: submission.subjectiveMax,
+      pendingCount: summary.pendingSubjectiveCount,
+      max: summary.subjectiveMax,
     },
     timing: {
-      startedAt: submission.startedAt.toISOString(),
-      completedAt: submission.completedAt.toISOString(),
-      elapsedSec: submission.elapsedSec,
-      autoSubmitted: submission.autoSubmitted,
+      startedAt: summary.startedAt.toISOString(),
+      completedAt: summary.completedAt.toISOString(),
+      elapsedSec: summary.elapsedSec,
+      autoSubmitted: summary.autoSubmitted,
     },
-    results: serializable.map((entry, index) => {
-      const result = summary.results[index];
-      return {
-        position: entry.position,
-        questionId: entry.questionId,
-        type: entry.type,
-        weight: entry.weight,
-        tags: entry.tags,
-        status: entry.status,
-        earned: entry.earned,
-        max: entry.max,
-        userAnswer: entry.userAnswer,
-        correctAnswer: entry.correctAnswer,
-        feedback: entry.feedback,
-        rubrics: entry.rubrics,
-        llmPrompt: result.requiresManualGrading
-          ? buildSubjectivePrompt({
-              question: result.question,
-              userAnswer: entry.userAnswer,
-              maxScore: entry.max,
-            })
-          : undefined,
-      };
-    }),
+    results: serializable.map(
+      (
+        entry: ReturnType<typeof createSerializableQuestionResult>,
+        index: number,
+      ) => {
+        const result = summary.results[index];
+        return {
+          position: entry.position,
+          questionId: entry.questionId,
+          type: entry.type,
+          weight: entry.weight,
+          tags: entry.tags,
+          status: entry.status,
+          earned: entry.earned,
+          max: entry.max,
+          userAnswer: entry.userAnswer,
+          correctAnswer: entry.correctAnswer,
+          feedback: entry.feedback,
+          rubrics: entry.rubrics,
+          llmPrompt: result.requiresManualGrading
+            ? buildSubjectivePrompt({
+                question: result.question,
+                userAnswer: entry.userAnswer,
+                maxScore: entry.max,
+              })
+            : undefined,
+        };
+      },
+    ),
   };
   const blob = new Blob([`${JSON.stringify(data, null, 2)}\n`], {
     type: "application/json;charset=utf-8",
@@ -638,15 +400,11 @@ function exportJsonSummary() {
   URL.revokeObjectURL(url);
 }
 
-function toggleTheme() {
-  theme = theme === "dark" ? "light" : "dark";
-}
-
 async function copySubjectivePrompt(result: QuestionResult) {
   if (promptCopyTimeout) {
     window.clearTimeout(promptCopyTimeout);
   }
-  copiedPromptQuestionId = result.question.id;
+  setCopiedPromptQuestionId(result.question.id);
   try {
     if (!result.requiresManualGrading) {
       throw new Error("Only subjective questions provide prompts.");
@@ -669,55 +427,28 @@ async function copySubjectivePrompt(result: QuestionResult) {
       document.execCommand("copy");
       document.body.removeChild(textarea);
     }
-    promptCopyError = null;
+    setPromptCopyError(null);
   } catch (error) {
-    promptCopyError =
+    setPromptCopyError(
       error instanceof Error
         ? error.message
-        : "Unable to copy prompt to clipboard.";
+        : "Unable to copy prompt to clipboard.",
+    );
   }
   promptCopyTimeout = window.setTimeout(() => {
-    copiedPromptQuestionId = null;
-    promptCopyError = null;
+    setCopiedPromptQuestionId(null);
+    setPromptCopyError(null);
     promptCopyTimeout = null;
   }, 3000);
 }
 
-function setLlmFeedbackInput(questionId: string, value: string) {
-  llmFeedbackInputs = { ...llmFeedbackInputs, [questionId]: value };
-}
-
 function applyLlmFeedback(result: QuestionResult) {
   if (!result.requiresManualGrading) return;
-  const questionId = result.question.id;
-  const raw = llmFeedbackInputs[questionId]?.trim();
-  if (!raw) {
-    llmFeedbackErrors = {
-      ...llmFeedbackErrors,
-      [questionId]: "Paste the JSON feedback before applying.",
-    };
-    llmFeedbackResults = { ...llmFeedbackResults, [questionId]: undefined };
-    return;
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    const feedback = llmFeedbackSchema.parse(parsed) as LlmFeedback;
-    llmFeedbackResults = { ...llmFeedbackResults, [questionId]: feedback };
-    llmFeedbackErrors = { ...llmFeedbackErrors, [questionId]: null };
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unable to parse feedback. Ensure valid JSON.";
-    llmFeedbackErrors = { ...llmFeedbackErrors, [questionId]: message };
-    llmFeedbackResults = { ...llmFeedbackResults, [questionId]: undefined };
-  }
+  applyStoredLlmFeedback(result.question.id);
 }
 
 function clearLlmFeedback(questionId: string) {
-  llmFeedbackInputs = { ...llmFeedbackInputs, [questionId]: "" };
-  llmFeedbackResults = { ...llmFeedbackResults, [questionId]: undefined };
-  llmFeedbackErrors = { ...llmFeedbackErrors, [questionId]: null };
+  clearStoredLlmFeedback(questionId);
 }
 
 function moveOrdering(
@@ -742,16 +473,6 @@ function resetOrdering(question: OrderingQuestion) {
   setOrderingTouched(question.id, false);
   updateTouched(question, [...question.items]);
 }
-
-function setOrderingTouched(questionId: string, value: boolean) {
-  const clone = new Set(orderingTouched);
-  if (value) {
-    clone.add(questionId);
-  } else {
-    clone.delete(questionId);
-  }
-  orderingTouched = clone;
-}
 </script>
 
 <svelte:window on:dragover|preventDefault={onDragOver} on:drop={onDrop} />
@@ -772,16 +493,16 @@ function setOrderingTouched(questionId: string, value: boolean) {
           variant="outline"
           size="icon"
           class="h-9"
-          aria-pressed={sidebarVisible}
-          title={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
+          aria-pressed={$sidebarVisible}
+          title={$sidebarVisible ? "Hide sidebar" : "Show sidebar"}
           on:click={toggleSidebar}
         >
-          {#if sidebarVisible}
+          {#if $sidebarVisible}
             <PanelLeft class="h-4 w-4" aria-hidden="true" />
           {:else}
             <PanelRight class="h-4 w-4" aria-hidden="true" />
           {/if}
-          <span class="sr-only">{sidebarVisible ? "Hide sidebar" : "Show sidebar"}</span>
+          <span class="sr-only">{$sidebarVisible ? "Hide sidebar" : "Show sidebar"}</span>
         </Button>
         {#if assessment}
           <div class="rounded-md border px-3 py-1 text-sm">
@@ -789,7 +510,7 @@ function setOrderingTouched(questionId: string, value: boolean) {
             <span class="ml-2 font-mono">{timeDisplay}</span>
           </div>
           <div class="w-40">
-            <Progress value={progressValue} />
+            <Progress value={$progressValue} />
             <p class="mt-1 text-xs text-muted-foreground">{answeredCount} / {totalQuestions} answered</p>
           </div>
         {/if}
@@ -797,25 +518,25 @@ function setOrderingTouched(questionId: string, value: boolean) {
           variant="ghost"
           size="icon"
           class="h-9"
-          aria-pressed={theme === "dark"}
-          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          on:click={toggleTheme}
+          aria-pressed={$theme === "dark"}
+          title={$theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          on:click={cycleTheme}
         >
-          {#if theme === "dark"}
+          {#if $theme === "dark"}
             <Moon class="h-4 w-4" aria-hidden="true" />
           {:else}
             <Sun class="h-4 w-4" aria-hidden="true" />
           {/if}
           <span class="sr-only">
-            {theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            {$theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           </span>
         </Button>
       </div>
     </div>
   </header>
 
-  <main class={`mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 ${sidebarVisible ? "lg:flex-row" : ""}`}>
-    {#if sidebarVisible}
+  <main class={`mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 ${$sidebarVisible ? "lg:flex-row" : ""}`}>
+    {#if $sidebarVisible}
       <aside class="w-full space-y-4 lg:w-64" transition:slide={{ duration: 200 }}>
       <Card>
         <CardHeader className="flex items-start justify-between space-y-0">
@@ -827,25 +548,25 @@ function setOrderingTouched(questionId: string, value: boolean) {
             variant="ghost"
             size="icon"
             class="h-8 w-8"
-            aria-pressed={!panelVisibility.assessment}
+            aria-pressed={!$panelVisibility.assessment}
             title={
-              panelVisibility.assessment
+              $panelVisibility.assessment
                 ? "Show assessment panel"
                 : "Hide assessment panel"
             }
             on:click={() => togglePanel("assessment")}
           >
-            {#if panelVisibility.assessment}
+            {#if $panelVisibility.assessment}
               <Eye class="h-4 w-4" aria-hidden="true" />
             {:else}
               <EyeOff class="h-4 w-4" aria-hidden="true" />
             {/if}
             <span class="sr-only">
-              {panelVisibility.assessment ? "Show" : "Hide"} assessment panel
+              {$panelVisibility.assessment ? "Show" : "Hide"} assessment panel
             </span>
           </Button>
         </CardHeader>
-        {#if !panelVisibility.assessment}
+        {#if !$panelVisibility.assessment}
           <CardContent className="space-y-4">
             <div
               class={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center text-sm transition ${
@@ -881,7 +602,11 @@ function setOrderingTouched(questionId: string, value: boolean) {
             <Separator />
             <label class="flex items-center justify-between text-sm">
               <span>Require all answers before submit</span>
-              <Switch bind:checked={requireAllAnswered} label="Require all answers" />
+              <Switch
+                bind:checked={requireAllAnsweredChecked}
+                label="Require all answers"
+                on:change={(event) => setRequireAllAnswered(event.detail)}
+              />
             </label>
             <Separator />
             <div class="space-y-2">
@@ -916,31 +641,31 @@ function setOrderingTouched(questionId: string, value: boolean) {
             variant="ghost"
             size="icon"
             class="h-8 w-8"
-            aria-pressed={!panelVisibility.recents}
+            aria-pressed={!$panelVisibility.recents}
             title={
-              panelVisibility.recents
+              $panelVisibility.recents
                 ? "Show recent files"
                 : "Hide recent files"
             }
             on:click={() => togglePanel("recents")}
           >
-            {#if panelVisibility.recents}
+            {#if $panelVisibility.recents}
               <Eye class="h-4 w-4" aria-hidden="true" />
             {:else}
               <EyeOff class="h-4 w-4" aria-hidden="true" />
             {/if}
             <span class="sr-only">
-              {panelVisibility.recents ? "Show" : "Hide"} recent files
+              {$panelVisibility.recents ? "Show" : "Hide"} recent files
             </span>
           </Button>
         </CardHeader>
-        {#if !panelVisibility.recents}
+        {#if !$panelVisibility.recents}
           <CardContent className="space-y-3">
-            {#if recentFiles.length === 0}
+            {#if $recentFiles.length === 0}
               <p class="text-sm text-muted-foreground">No recent files yet.</p>
             {:else}
               <ul class="space-y-2 text-sm">
-                {#each recentFiles as file}
+                {#each $recentFiles as file}
                   <li>
                     <button
                       type="button"
@@ -971,10 +696,7 @@ function setOrderingTouched(questionId: string, value: boolean) {
                 variant="ghost"
                 size="icon"
                 title="Clear history"
-                on:click={() =>
-                  clearRecentFiles().then(async () =>
-                    (recentFiles = await getRecentFiles()),
-                  )}
+                on:click={() => clearHistory()}
                 >
                 <Trash2 class="h-4 w-4" aria-hidden="true" />
                 <span class="sr-only">Clear history</span>
@@ -995,25 +717,25 @@ function setOrderingTouched(questionId: string, value: boolean) {
               variant="ghost"
               size="icon"
               class="h-8 w-8"
-              aria-pressed={!panelVisibility.questions}
+              aria-pressed={!$panelVisibility.questions}
               title={
-                panelVisibility.questions
+                $panelVisibility.questions
                   ? "Show question navigator"
                   : "Hide question navigator"
               }
               on:click={() => togglePanel("questions")}
             >
-              {#if panelVisibility.questions}
+              {#if $panelVisibility.questions}
                 <Eye class="h-4 w-4" aria-hidden="true" />
               {:else}
                 <EyeOff class="h-4 w-4" aria-hidden="true" />
               {/if}
               <span class="sr-only">
-                {panelVisibility.questions ? "Show" : "Hide"} question list
+                {$panelVisibility.questions ? "Show" : "Hide"} question list
               </span>
             </Button>
           </CardHeader>
-          {#if !panelVisibility.questions}
+          {#if !$panelVisibility.questions}
             <CardContent>
               <nav class="grid grid-cols-5 gap-2 text-sm md:grid-cols-4 lg:grid-cols-3">
                 {#each questions as question, index}
@@ -1092,7 +814,11 @@ function setOrderingTouched(questionId: string, value: boolean) {
                 {/if}
               </div>
               <div class="ml-auto flex flex-wrap items-center gap-2">
-                <Button size="sm" variant="outline" on:click={() => (showResultDialog = true)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  on:click={() => showResultDialogStore.set(true)}
+                >
                   View summary
                 </Button>
                 <Button size="sm" on:click={exportCsv}>Export results CSV</Button>
@@ -1313,7 +1039,13 @@ function setOrderingTouched(questionId: string, value: boolean) {
           </div>
           <div class="flex items-center gap-2">
             <Button variant="ghost" on:click={resetAssessment}>Reset answers</Button>
-            <Button variant="destructive" disabled={submitDisabled} on:click={() => submitQuiz(false)}>Submit</Button>
+            <Button
+              variant="destructive"
+              disabled={submitDisabledValue}
+              on:click={() => submitQuiz(false)}
+            >
+              Submit
+            </Button>
           </div>
         </div>
       {/if}
@@ -1322,7 +1054,11 @@ function setOrderingTouched(questionId: string, value: boolean) {
 </div>
 
 {#if submission}
-  <Dialog open={showResultDialog} title="Quiz summary" on:close={() => (showResultDialog = false)}>
+  <Dialog
+    open={showResultDialog}
+    title="Quiz summary"
+    on:close={() => showResultDialogStore.set(false)}
+  >
     <div class="space-y-3 text-sm">
       <p>
         <span class="font-semibold">Deterministic score:</span>
@@ -1389,9 +1125,9 @@ function setOrderingTouched(questionId: string, value: boolean) {
                   {/if}
                   {#if result.requiresManualGrading}
                     {@const questionId = result.question.id}
-                    {@const feedbackInput = llmFeedbackInputs[questionId] ?? ""}
-                    {@const feedbackError = llmFeedbackErrors[questionId]}
-                    {@const feedback = llmFeedbackResults[questionId]}
+                    {@const feedbackInput = $llmFeedbackInputs[questionId] ?? ""}
+                    {@const feedbackError = $llmFeedbackErrors[questionId]}
+                    {@const feedback = $llmFeedbackResults[questionId]}
                     <div class="mt-2 space-y-3">
                       <div class="rounded-md border border-dashed bg-muted/30 p-2 text-[0.7rem] text-muted-foreground">
                         <p class="mb-1 font-semibold uppercase tracking-wide">Rubrics</p>
@@ -1412,11 +1148,11 @@ function setOrderingTouched(questionId: string, value: boolean) {
                         <Button size="sm" variant="outline" on:click={() => copySubjectivePrompt(result)}>
                           Copy LLM prompt
                         </Button>
-                        {#if copiedPromptQuestionId === questionId && !promptCopyError}
+                        {#if $copiedPromptQuestionId === questionId && !$promptCopyError}
                           <span class="text-xs text-muted-foreground">Copied!</span>
                         {/if}
-                        {#if copiedPromptQuestionId === questionId && promptCopyError}
-                          <span class="text-xs text-destructive">{promptCopyError}</span>
+                        {#if $copiedPromptQuestionId === questionId && $promptCopyError}
+                          <span class="text-xs text-destructive">{$promptCopyError}</span>
                         {/if}
                       </div>
                       <div class="space-y-2 rounded-md border border-dashed bg-muted/20 p-3">
