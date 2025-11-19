@@ -28,11 +28,24 @@ const {
   inputs: llmFeedbackInputs,
   results: llmFeedbackResults,
   errors: llmFeedbackErrors,
+  workspaces: llmWorkspaces,
+  workspaceErrors: llmWorkspaceErrors,
   copiedPromptQuestionId,
   promptCopyError,
   setInput: setLlmFeedbackInput,
   applyFeedback: applyStoredLlmFeedback,
   clearFeedback: clearStoredLlmFeedback,
+  initializeWorkspace,
+  setWorkspaceVerdict,
+  setWorkspaceScore,
+  setWorkspaceFeedback,
+  setWorkspaceRubricFraction,
+  setWorkspaceRubricComments,
+  addWorkspaceImprovement,
+  updateWorkspaceImprovement,
+  removeWorkspaceImprovement,
+  writeWorkspaceToInput,
+  hydrateWorkspaceFromFeedback,
   setCopiedPromptQuestionId,
   setPromptCopyError,
 } = llm;
@@ -55,6 +68,12 @@ $: currentResult =
   summary && summary.results.length > 0
     ? summary.results[Math.min(activeIndex, summary.results.length - 1)]
     : null;
+$: if (currentResult?.requiresManualGrading) {
+  initializeWorkspace(currentResult.question.id, {
+    rubrics: currentResult.rubrics,
+    maxScore: currentResult.max,
+  });
+}
 
 onDestroy(() => {
   if (promptCopyTimeout) {
@@ -152,6 +171,16 @@ function applyLlmFeedback(result: QuestionResult) {
 
 function clearLlmFeedback(questionId: string) {
   clearStoredLlmFeedback(questionId);
+}
+
+function insertWorkspaceJson(questionId: string) {
+  writeWorkspaceToInput(questionId);
+}
+
+function loadWorkspaceFromApplied(questionId: string) {
+  const feedback = $llmFeedbackResults[questionId];
+  if (!feedback) return;
+  hydrateWorkspaceFromFeedback(questionId, feedback);
 }
 </script>
 
@@ -361,6 +390,8 @@ function clearLlmFeedback(questionId: string) {
                 {@const feedbackInput = $llmFeedbackInputs[questionId] ?? ""}
                 {@const feedbackError = $llmFeedbackErrors[questionId]}
                 {@const feedback = $llmFeedbackResults[questionId]}
+                {@const workspace = $llmWorkspaces[questionId]}
+                {@const workspaceError = $llmWorkspaceErrors[questionId]}
                 <Separator />
                 <div class="space-y-4">
                   <div class="rounded-md border border-dashed bg-muted/30 p-3 text-[0.75rem] text-muted-foreground">
@@ -378,6 +409,193 @@ function clearLlmFeedback(questionId: string) {
                       {/each}
                     </ul>
                   </div>
+                  {#if workspace}
+                    {@const verdictOptions = ["correct", "partial", "incorrect"] as const}
+                    {@const summaryFieldId = `${questionId}-workspace-summary`}
+                    {@const averageFraction =
+                      workspace.rubricBreakdown.length > 0
+                        ?
+                          workspace.rubricBreakdown.reduce(
+                            (sum, entry) => sum + entry.achievedFraction,
+                            0,
+                          ) / workspace.rubricBreakdown.length
+                        : 0}
+                    {@const suggestedScore =
+                      Math.round(averageFraction * workspace.maxScore * 100) / 100}
+                    <div class="space-y-4 rounded-md border bg-card/70 p-4 text-sm">
+                      <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p class="text-xs uppercase text-muted-foreground">LLM grading workspace</p>
+                          <p class="text-muted-foreground">
+                            Adjust verdict, rubric sliders, and narrative feedback before turning it into JSON.
+                          </p>
+                        </div>
+                        <div class="flex flex-wrap gap-2 text-xs">
+                          <Button size="sm" variant="outline" on:click={() => insertWorkspaceJson(questionId)}>
+                            Insert workspace JSON
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={!feedback}
+                            on:click={() => loadWorkspaceFromApplied(questionId)}
+                          >
+                            Load from applied JSON
+                          </Button>
+                        </div>
+                      </div>
+                      <div class="grid gap-3 md:grid-cols-2">
+                        <div class="space-y-2 rounded-md border bg-muted/20 p-3">
+                          <p class="text-xs uppercase text-muted-foreground">Verdict</p>
+                          <div class="flex flex-wrap gap-2">
+                            {#each verdictOptions as verdictOption}
+                              <button
+                                type="button"
+                                class={`rounded-md border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
+                                  workspace.verdict === verdictOption
+                                    ? "border-primary bg-primary/10 text-primary"
+                                    : "border-input text-muted-foreground hover:border-foreground/40"
+                                }`}
+                                on:click={() => setWorkspaceVerdict(questionId, verdictOption)}
+                              >
+                                {verdictOption}
+                              </button>
+                            {/each}
+                          </div>
+                        </div>
+                        <div class="space-y-2 rounded-md border bg-muted/20 p-3">
+                          <div class="flex items-center justify-between text-xs uppercase text-muted-foreground">
+                            <p>Score</p>
+                            <span class="font-mono text-foreground">Max {workspace.maxScore}</span>
+                          </div>
+                          <div class="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max={workspace.maxScore}
+                              step="0.25"
+                              class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              value={workspace.score}
+                              on:input={(event) =>
+                                setWorkspaceScore(questionId, Number((event.target as HTMLInputElement).value))}
+                            />
+                            <span class="text-sm text-muted-foreground">/ {workspace.maxScore}</span>
+                          </div>
+                          <div class="flex items-center justify-between text-[0.7rem] text-muted-foreground">
+                            <span>Suggested: {suggestedScore} / {workspace.maxScore}</span>
+                            <button
+                              type="button"
+                              class="font-semibold text-primary underline-offset-2 hover:underline"
+                              on:click={() => setWorkspaceScore(questionId, suggestedScore)}
+                            >
+                              Use suggested
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="space-y-3">
+                        {#each workspace.rubricBreakdown as rubric, rubricIndex}
+                          <div class="space-y-2 rounded-md border bg-background/50 p-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              <span class="text-foreground">{@html renderWithKatex(rubric.rubric)}</span>
+                              <span class="font-mono text-foreground">{Math.round(rubric.achievedFraction * 100)}%</span>
+                            </div>
+                            {#if rubric.description}
+                              <p class="text-xs text-muted-foreground">
+                                {@html renderWithKatex(rubric.description)}
+                              </p>
+                            {/if}
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="5"
+                              value={Math.round(rubric.achievedFraction * 100)}
+                              class="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted"
+                              on:input={(event) =>
+                                setWorkspaceRubricFraction(
+                                  questionId,
+                                  rubricIndex,
+                                  Number((event.target as HTMLInputElement).value) / 100,
+                                )}
+                            />
+                            <textarea
+                              class="h-20 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              placeholder="Comments for this rubric"
+                              value={rubric.comments}
+                              on:input={(event) =>
+                                setWorkspaceRubricComments(
+                                  questionId,
+                                  rubricIndex,
+                                  (event.target as HTMLTextAreaElement).value,
+                                )}
+                            ></textarea>
+                          </div>
+                        {/each}
+                      </div>
+                      <div class="space-y-2">
+                        <label
+                          class="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                          for={summaryFieldId}
+                        >
+                          Feedback summary
+                        </label>
+                        <textarea
+                          id={summaryFieldId}
+                          class="h-28 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          placeholder="Summarize the score justification"
+                          value={workspace.feedback}
+                          on:input={(event) =>
+                            setWorkspaceFeedback(questionId, (event.target as HTMLTextAreaElement).value)}
+                        ></textarea>
+                      </div>
+                      <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Suggested improvements
+                          </p>
+                          <Button size="sm" variant="ghost" on:click={() => addWorkspaceImprovement(questionId)}>
+                            Add suggestion
+                          </Button>
+                        </div>
+                        {#if workspace.improvements.length === 0}
+                          <p class="text-xs text-muted-foreground">
+                            No suggestions yet. Click "Add suggestion" to capture actionable notes.
+                          </p>
+                        {:else}
+                          <div class="space-y-2">
+                            {#each workspace.improvements as improvement, improvementIndex}
+                              <div class="flex gap-2">
+                                <input
+                                  class="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                  placeholder={`Suggestion ${improvementIndex + 1}`}
+                                  value={improvement}
+                                  on:input={(event) =>
+                                    updateWorkspaceImprovement(
+                                      questionId,
+                                      improvementIndex,
+                                      (event.target as HTMLInputElement).value,
+                                    )}
+                                />
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  class="h-9 w-9"
+                                  aria-label={`Remove suggestion ${improvementIndex + 1}`}
+                                  on:click={() => removeWorkspaceImprovement(questionId, improvementIndex)}
+                                >
+                                  ×
+                                </Button>
+                              </div>
+                            {/each}
+                          </div>
+                        {/if}
+                      </div>
+                      {#if workspaceError}
+                        <p class="text-xs text-destructive">{workspaceError}</p>
+                      {/if}
+                    </div>
+                  {/if}
                   <div class="flex flex-wrap items-center gap-2 text-xs">
                     <Button size="sm" variant="outline" on:click={() => copySubjectivePrompt(currentResult)}>
                       Copy LLM prompt

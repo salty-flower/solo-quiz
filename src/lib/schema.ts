@@ -145,24 +145,29 @@ export function questionWeight(question: Question): number {
   return question.weight ?? 1;
 }
 
-export const llmFeedbackSchema = z.object({
-  verdict: z.enum(["correct", "incorrect", "partial"]),
-  score: z.number().min(0),
-  maxScore: z.number().positive(),
-  feedback: z.string().min(1, "Feedback text is required"),
-  rubricBreakdown: z
-    .array(
-      z.object({
-        rubric: z.string().min(1, "Rubric reference is required"),
-        comments: z.string().min(1, "Provide comments for this rubric"),
-        achievedFraction: z
-          .number()
-          .min(0, "Fraction cannot be negative")
-          .max(1, "Fraction cannot exceed 1"),
-      }),
-    )
-    .min(1, "Provide at least one rubric breakdown entry"),
-  improvements: z.array(z.string().min(1)).default([]),
-});
+export const llmFeedbackSchema = z
+  .object({
+    verdict: z.enum(["correct", "incorrect", "partial"]),
+    score: z.number().min(0),
+    maxScore: z.number().positive(),
+    feedback: z.string().min(1, "Feedback text is required"),
+    rubricBreakdown: z
+      .array(
+        z.object({
+          rubric: z.string().min(1, "Rubric reference is required"),
+          comments: z.string().min(1, "Provide comments for this rubric"),
+          achievedFraction: z
+            .number()
+            .min(0, "Fraction cannot be negative")
+            .max(1, "Fraction cannot exceed 1"),
+        }),
+      )
+      .min(1, "Provide at least one rubric breakdown entry"),
+    improvements: z.array(z.string().min(1)).default([]),
+  })
+  .refine((data) => data.score <= data.maxScore, {
+    message: "Score cannot exceed the max score",
+    path: ["score"],
+  });
 
 export type LlmFeedback = z.infer<typeof llmFeedbackSchema>;
