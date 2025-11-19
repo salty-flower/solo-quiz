@@ -187,11 +187,12 @@ function openReviewPage() {
 }
 
 function closeReviewPage() {
+  const homePath = getHomePath();
   if (reviewAttemptId && !getAttempt(reviewAttemptId)) {
-    navigate("/");
+    navigate(homePath);
     return;
   }
-  navigate(getHomePath());
+  navigate(homePath);
 }
 
 function onFileInputChange(event: Event) {
