@@ -10,6 +10,7 @@ import {
 } from "./lib/components/ui/card";
 import AppHeader from "./lib/components/app/AppHeader.svelte";
 import AppSidebar from "./lib/components/app/AppSidebar.svelte";
+import AttemptHistory from "./lib/components/app/AttemptHistory.svelte";
 import QuestionCard from "./lib/components/app/QuestionCard.svelte";
 import QuizNavigation from "./lib/components/app/QuizNavigation.svelte";
 import SubmissionSummaryBanner from "./lib/components/app/SubmissionSummaryBanner.svelte";
@@ -35,7 +36,7 @@ import { preferences } from "./lib/stores/preferences";
 import { quiz } from "./lib/stores/quiz";
 import ReviewPage from "./lib/review/ReviewPage.svelte";
 import { llm } from "./lib/stores/llm";
-import { getAttempt } from "./lib/stores/attempts";
+import { attemptList, getAttempt } from "./lib/stores/attempts";
 import {
   getReviewPath,
   getHomePath,
@@ -92,6 +93,7 @@ const {
   setCurrentIndex,
   setRequireAllAnswered,
   submitQuiz,
+  retakeIncorrectQuestions,
   resetAssessment,
   clearHistory,
   teardown,
@@ -164,6 +166,10 @@ function closeReviewPage() {
     return;
   }
   navigate(homePath);
+}
+
+function openAttemptHistoryReview(attemptId: string) {
+  navigate(getReviewPath(attemptId));
 }
 
 function onWindowDragOver(event: DragEvent) {
@@ -410,6 +416,15 @@ function exportJsonSummary() {
           </Alert>
         {/if}
 
+        {#if $attemptList.length > 0}
+          <AttemptHistory
+            attempts={$attemptList}
+            onReview={openAttemptHistoryReview}
+            onRetakeIncorrect={retakeIncorrectQuestions}
+            currentAssessmentTitle={assessment ? assessment.meta.title : null}
+          />
+        {/if}
+
         {#if !assessment}
           <Card>
             <CardHeader>
@@ -440,6 +455,7 @@ function exportJsonSummary() {
               {exportCsv}
               {exportJsonSummary}
               {exportAssessment}
+              retakeIncorrect={() => submission && retakeIncorrectQuestions(submission)}
               {resetAssessment}
             />
           {/if}
