@@ -12,14 +12,14 @@ type WorkspaceMap = Record<string, GradingWorkspace | undefined>;
 type WorkspaceErrors = Record<string, string | null>;
 type WorkspaceVisibilityMap = Record<string, boolean | undefined>;
 
-type RubricWorkspaceEntry = {
+export type RubricWorkspaceEntry = {
   rubric: string;
   description?: string;
   achievedFraction: number;
   comments: string;
 };
 
-type GradingWorkspace = {
+export type GradingWorkspace = {
   verdict: LlmFeedback["verdict"];
   score: number;
   maxScore: number;
