@@ -4,12 +4,13 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build:standalone": "cross-env BUILD_TARGET=inline vite build --config vite.config.ts",
-    "build:cdn": "cross-env BUILD_TARGET=cdn vite build --config vite.config.ts",
+    "rolldown-vite": "cross-env node_modules/rolldown-vite/bin/vite.js",
+    "dev": "rolldown-vite",
+    "build:standalone": "cross-env BUILD_TARGET=inline pnpm run rolldown-vite build",
+    "build:cdn": "cross-env BUILD_TARGET=cdn pnpm run rolldown-vite build",
     "build:schema": "tsx scripts/generate-schema.ts",
     "build": "pnpm run build:standalone && pnpm run build:cdn && pnpm run build:schema",
-    "preview": "vite preview",
+    "preview": "pnpm run rolldown-vite preview",
     "format": "biome format . --write",
     "lint": "biome lint . --write",
     "typecheck": "tsc --noEmit",
@@ -42,16 +43,11 @@
     "tailwindcss": "^3.4.15",
     "tsx": "^4.19.2",
     "typescript": "~5.9.3",
-    "rollup-vite": "npm:vite@^7.2.4",
-    "vite": "npm:rolldown-vite@^7.2.7",
+    "rolldown-vite": "^7.2.7",
+    "vite": "^7.2.4",
     "vite-plugin-singlefile": "^0.13.5",
     "vitest": "^2.1.4",
     "zod-to-json-schema": "^3.23.5",
     "jsdom": "^25.0.1"
-  },
-  "pnpm": {
-    "overrides": {
-      "vitest>vite": "npm:vite@^7.2.4"
-    }
   }
 }
