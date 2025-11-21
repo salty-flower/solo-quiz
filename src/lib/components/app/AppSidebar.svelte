@@ -34,12 +34,16 @@ export let loadRecentAssessment: (
 export let clearHistory: () => void;
 export let questions: Question[] = [];
 export let questionNavStyles: (question: Question, index: number) => string;
+export let questionNavStatus: (
+  question: Question,
+  index: number,
+) => { label: string; indicator: string };
 export let navigateTo: (index: number) => void | Promise<void>;
 export let downloadExampleAssessment: (id: string) => void;
 export let handleFile: (file: File) => Promise<void> | void;
 
 let fileInput: HTMLInputElement | null = null;
-let dropActive = false;
+let isDropActive = false;
 
 function onFileInputChange(event: Event) {
   const target = event.target as HTMLInputElement;
@@ -51,7 +55,7 @@ function onFileInputChange(event: Event) {
 
 function onDrop(event: DragEvent) {
   event.preventDefault();
-  dropActive = false;
+  isDropActive = false;
   if (!event.dataTransfer) return;
   const file = event.dataTransfer.files?.[0];
   if (file) {
@@ -61,12 +65,12 @@ function onDrop(event: DragEvent) {
 
 function onDragOver(event: DragEvent) {
   event.preventDefault();
-  dropActive = true;
+  isDropActive = true;
 }
 
 function onDragLeave(event: DragEvent) {
   event.preventDefault();
-  dropActive = false;
+  isDropActive = false;
 }
 
 function handleDropzoneKey(event: KeyboardEvent) {
@@ -110,7 +114,7 @@ function handleDropzoneKey(event: KeyboardEvent) {
       <CardContent className="space-y-4">
         <div
           class={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center text-sm transition ${
-            dropActive ? "border-primary bg-primary/10" : "border-muted"
+            isDropActive ? "border-primary bg-primary/10" : "border-muted"
           }`}
           on:dragover|preventDefault={onDragOver}
           on:dragleave={onDragLeave}
@@ -275,6 +279,7 @@ function handleDropzoneKey(event: KeyboardEvent) {
         <CardContent>
           <nav class="grid grid-cols-5 gap-2 text-sm md:grid-cols-4 lg:grid-cols-3">
             {#each questions as question, index}
+              {@const status = questionNavStatus(question, index)}
               <button
                 type="button"
                 class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${questionNavStyles(
@@ -282,8 +287,12 @@ function handleDropzoneKey(event: KeyboardEvent) {
                   index,
                 )}`}
                 on:click={() => navigateTo(index)}
+                aria-label={status.label}
+                title={status.label}
               >
-                {index + 1}
+                <span aria-hidden="true" class="mr-1 text-xs">{status.indicator}</span>
+                <span aria-hidden="true">{index + 1}</span>
+                <span class="sr-only">{status.label}</span>
               </button>
             {/each}
           </nav>

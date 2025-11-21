@@ -11,6 +11,7 @@ import {
   type AnswerValue,
   type SubmissionSummary,
 } from "../results";
+import { TIMER_INTERVAL_MS } from "../constants";
 import { registerAttempt } from "./attempts";
 import { getReviewPath, navigate } from "./router";
 
@@ -133,6 +134,11 @@ function createQuizStore() {
     return result;
   }
 
+  /**
+   * Applies an assessment to the quiz state, initializing answers, timers,
+   * and ordering while respecting shuffle preferences. The helper also resets
+   * prior submission state so users start fresh on new loads or retakes.
+   */
   function applyAssessment(
     data: Assessment,
     options?: { questions?: Question[] },
@@ -169,7 +175,7 @@ function createQuizStore() {
           submitQuiz(true);
         }
       }
-    }, 1000);
+    }, TIMER_INTERVAL_MS);
   }
 
   async function loadAssessment(

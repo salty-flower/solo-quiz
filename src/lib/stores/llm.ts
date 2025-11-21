@@ -4,6 +4,7 @@ import {
   type LlmFeedback,
   type SubjectiveQuestion,
 } from "../schema";
+import { STORAGE_KEYS } from "../constants";
 
 type FeedbackInputs = Record<string, string>;
 type FeedbackErrors = Record<string, string | null>;
@@ -32,8 +33,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-const WORKSPACE_VISIBILITY_STORAGE_KEY =
-  "solo-quiz-llm-workspace-visibility-v1";
+const { workspaceVisibility: WORKSPACE_VISIBILITY_STORAGE_KEY } = STORAGE_KEYS;
 
 function loadWorkspaceVisibility(): WorkspaceVisibilityMap {
   if (typeof localStorage === "undefined") {

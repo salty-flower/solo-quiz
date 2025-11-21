@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { STORAGE_KEYS, STORAGE_VERSIONS } from "./constants";
 import { reportStorageIssue } from "./storage-notices";
 import {
   isIndexedDbAvailable,
@@ -7,10 +8,7 @@ import {
   safeLocalStorageSet,
 } from "./utils/persistence";
 
-const DB_NAME = "solo-quiz";
-const STORE_RECENTS = "recent-files";
-const LOCAL_STORAGE_KEY = "solo-quiz-recent-files";
-const LOCAL_STORAGE_VERSION = 1;
+const { recentsDbName, recentsStore, recentsLocal } = STORAGE_KEYS;
 
 export interface RecentFileEntry {
   name: string;
@@ -29,7 +27,7 @@ export interface RecentFileMeta {
 }
 
 interface SoloQuizDB extends DBSchema {
-  [STORE_RECENTS]: {
+  [recentsStore]: {
     key: string;
     value: RecentFileEntry;
   };
@@ -44,10 +42,10 @@ async function getDb(): Promise<IDBPDatabase<SoloQuizDB> | null> {
   }
 
   if (!dbPromise) {
-    dbPromise = openDB<SoloQuizDB>(DB_NAME, 1, {
+    dbPromise = openDB<SoloQuizDB>(recentsDbName, 1, {
       upgrade(db) {
-        if (!db.objectStoreNames.contains(STORE_RECENTS)) {
-          db.createObjectStore(STORE_RECENTS, { keyPath: "name" });
+        if (!db.objectStoreNames.contains(recentsStore)) {
+          db.createObjectStore(recentsStore, { keyPath: "name" });
         }
       },
     }).catch((error) => {
@@ -91,7 +89,7 @@ interface LocalRecentPayload {
 function clearLocalRecents() {
   if (typeof localStorage === "undefined") return;
   try {
-    safeLocalStorageRemove(LOCAL_STORAGE_KEY);
+    safeLocalStorageRemove(recentsLocal);
   } catch (error) {
     console.warn("Unable to clear local recent files", error);
   }
@@ -99,7 +97,7 @@ function clearLocalRecents() {
 
 function readLocalRecents(): RecentFileEntry[] {
   if (typeof localStorage === "undefined") return [...memoryRecents];
-  const stored = safeLocalStorageGet(LOCAL_STORAGE_KEY);
+  const stored = safeLocalStorageGet(recentsLocal);
   if (!stored) return [...memoryRecents];
 
   try {
@@ -108,7 +106,7 @@ function readLocalRecents(): RecentFileEntry[] {
       ? parsed
       : parsed &&
           typeof parsed === "object" &&
-          (parsed as LocalRecentPayload).version === LOCAL_STORAGE_VERSION &&
+          (parsed as LocalRecentPayload).version === STORAGE_VERSIONS.recents &&
           Array.isArray((parsed as LocalRecentPayload).items)
         ? (parsed as LocalRecentPayload).items
         : null;
@@ -122,8 +120,8 @@ function readLocalRecents(): RecentFileEntry[] {
     if (cleaned.length !== items.length) {
       clearLocalRecents();
       safeLocalStorageSet(
-        LOCAL_STORAGE_KEY,
-        JSON.stringify({ version: LOCAL_STORAGE_VERSION, items: cleaned }),
+        recentsLocal,
+        JSON.stringify({ version: STORAGE_VERSIONS.recents, items: cleaned }),
       );
     }
     return cleaned;
@@ -143,8 +141,8 @@ function writeLocalRecents(entries: RecentFileEntry[]): void {
       return;
     }
     safeLocalStorageSet(
-      LOCAL_STORAGE_KEY,
-      JSON.stringify({ version: LOCAL_STORAGE_VERSION, items: entries }),
+      recentsLocal,
+      JSON.stringify({ version: STORAGE_VERSIONS.recents, items: entries }),
     );
   } catch (error) {
     console.warn("Unable to persist recents to localStorage", error);
@@ -181,7 +179,7 @@ function mergeEntry(
 async function getRecentFilesFromDb(
   db: IDBPDatabase<SoloQuizDB>,
 ): Promise<RecentFileEntry[]> {
-  const tx = db.transaction(STORE_RECENTS, "readonly");
+  const tx = db.transaction(recentsStore, "readonly");
   const all = await tx.store.getAll();
   return sortRecents(all);
 }
@@ -212,7 +210,7 @@ export async function touchRecentFile(
     return;
   }
 
-  const tx = db.transaction(STORE_RECENTS, "readwrite");
+  const tx = db.transaction(recentsStore, "readwrite");
   await tx.store.put(entry);
   await tx.done;
   const snapshot = await getRecentFilesFromDb(db);
@@ -227,7 +225,7 @@ export async function clearRecentFiles(): Promise<void> {
     return;
   }
 
-  const tx = db.transaction(STORE_RECENTS, "readwrite");
+  const tx = db.transaction(recentsStore, "readwrite");
   await tx.store.clear();
   await tx.done;
   persistSnapshot([]);
