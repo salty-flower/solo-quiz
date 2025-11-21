@@ -1,36 +1,165 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
 import Button from "../components/ui/Button.svelte";
 import Separator from "../components/ui/Separator.svelte";
+import { buildSubjectivePrompt } from "../llm";
 import { renderWithKatex } from "../katex";
 import type { LlmFeedback } from "../schema";
 import type { SubjectiveQuestionResult } from "../results";
-import type { GradingWorkspace } from "../stores/llm";
+import { llm, type GradingWorkspace } from "../stores/llm";
 
 export let result: SubjectiveQuestionResult;
-export let feedbackInput: string;
-export let feedbackError: string | null | undefined;
-export let feedback: LlmFeedback | undefined;
-export let workspace: GradingWorkspace | undefined;
-export let workspaceError: string | null | undefined;
-export let isWorkspaceCollapsed: boolean;
-export let copiedPromptQuestionId: string | null;
-export let promptCopyError: string | null;
 
-export let copyPrompt: () => void;
-export let applyFeedback: () => void;
-export let clearFeedback: () => void;
-export let insertWorkspaceJson: () => void;
-export let loadWorkspaceFromApplied: () => void;
-export let toggleWorkspaceVisibility: () => void;
-export let setFeedbackInput: (value: string) => void;
-export let setWorkspaceVerdict: (verdict: GradingWorkspace["verdict"]) => void;
-export let setWorkspaceScore: (score: number) => void;
-export let setWorkspaceFeedback: (feedback: string) => void;
-export let setWorkspaceRubricFraction: (index: number, value: number) => void;
-export let setWorkspaceRubricComments: (index: number, value: string) => void;
-export let addWorkspaceImprovement: () => void;
-export let updateWorkspaceImprovement: (index: number, value: string) => void;
-export let removeWorkspaceImprovement: (index: number) => void;
+const {
+  inputs,
+  errors,
+  results,
+  workspaces,
+  workspaceErrors,
+  workspaceVisibility,
+  copiedPromptQuestionId,
+  promptCopyError,
+  setInput,
+  applyFeedback: applyFeedbackToStore,
+  clearFeedback: clearFeedbackInStore,
+  setWorkspaceVerdict,
+  setWorkspaceScore,
+  setWorkspaceFeedback,
+  setWorkspaceRubricFraction,
+  setWorkspaceRubricComments,
+  addWorkspaceImprovement,
+  updateWorkspaceImprovement,
+  removeWorkspaceImprovement,
+  writeWorkspaceToInput,
+  hydrateWorkspaceFromFeedback,
+  toggleWorkspaceVisibility,
+  setCopiedPromptQuestionId,
+  setPromptCopyError,
+} = llm;
+
+let feedbackInput: string;
+let feedbackError: string | null | undefined;
+let feedback: LlmFeedback | undefined;
+let workspace: GradingWorkspace | undefined;
+let workspaceError: string | null | undefined;
+let isWorkspaceCollapsed: boolean;
+let questionId: string;
+let promptCopyTimeout: number | null = null;
+
+$: questionId = result.question.id;
+$: feedbackInput = $inputs[questionId] ?? "";
+$: feedbackError = $errors[questionId];
+$: feedback = $results[questionId];
+$: workspace = $workspaces[questionId];
+$: workspaceError = $workspaceErrors[questionId];
+$: isWorkspaceCollapsed = $workspaceVisibility[questionId] ?? false;
+
+function setFeedbackInput(value: string) {
+  setInput(questionId, value);
+}
+
+function setWorkspaceVerdictValue(verdict: GradingWorkspace["verdict"]) {
+  setWorkspaceVerdict(questionId, verdict);
+}
+
+function setWorkspaceScoreValue(score: number) {
+  setWorkspaceScore(questionId, score);
+}
+
+function setWorkspaceFeedbackValue(feedbackValue: string) {
+  setWorkspaceFeedback(questionId, feedbackValue);
+}
+
+function setWorkspaceRubricFractionValue(index: number, value: number) {
+  setWorkspaceRubricFraction(questionId, index, value);
+}
+
+function setWorkspaceRubricCommentsValue(index: number, value: string) {
+  setWorkspaceRubricComments(questionId, index, value);
+}
+
+function addWorkspaceImprovementEntry() {
+  addWorkspaceImprovement(questionId);
+}
+
+function updateWorkspaceImprovementEntry(index: number, value: string) {
+  updateWorkspaceImprovement(questionId, index, value);
+}
+
+function removeWorkspaceImprovementEntry(index: number) {
+  removeWorkspaceImprovement(questionId, index);
+}
+
+function insertWorkspaceJson() {
+  writeWorkspaceToInput(questionId);
+}
+
+function loadWorkspaceFromApplied() {
+  const applied = $results[questionId];
+  if (!applied) return;
+  hydrateWorkspaceFromFeedback(questionId, applied, result.max);
+}
+
+function toggleWorkspace() {
+  toggleWorkspaceVisibility(questionId);
+}
+
+function applyFeedbackForQuestion() {
+  applyFeedbackToStore(questionId, result.max);
+}
+
+function clearFeedbackForQuestion() {
+  clearFeedbackInStore(questionId);
+}
+
+async function copyPrompt() {
+  if (promptCopyTimeout) {
+    window.clearTimeout(promptCopyTimeout);
+  }
+  setCopiedPromptQuestionId(questionId);
+  try {
+    const prompt = buildSubjectivePrompt({
+      question: result.question,
+      userAnswer: result.userAnswer,
+      maxScore: result.max,
+    });
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(prompt);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = prompt;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "absolute";
+      textarea.style.left = "-9999px";
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
+    setPromptCopyError(null);
+  } catch (error) {
+    setPromptCopyError(
+      error instanceof Error
+        ? error.message
+        : "Unable to copy prompt to clipboard.",
+    );
+  }
+
+  promptCopyTimeout = window.setTimeout(() => {
+    setCopiedPromptQuestionId(null);
+    setPromptCopyError(null);
+    promptCopyTimeout = null;
+  }, 3000);
+}
+
+onDestroy(() => {
+  if (promptCopyTimeout) {
+    window.clearTimeout(promptCopyTimeout);
+    promptCopyTimeout = null;
+  }
+  setCopiedPromptQuestionId(null);
+  setPromptCopyError(null);
+});
 </script>
 
 <Separator />
@@ -72,7 +201,7 @@ export let removeWorkspaceImprovement: (index: number) => void;
           </p>
         </div>
         <div class="flex flex-wrap gap-2 text-xs">
-          <Button size="sm" variant="ghost" on:click={toggleWorkspaceVisibility}>
+          <Button size="sm" variant="ghost" on:click={toggleWorkspace}>
             {isWorkspaceCollapsed ? "Show workspace" : "Hide workspace"}
           </Button>
           <Button size="sm" variant="outline" on:click={insertWorkspaceJson}>
@@ -105,7 +234,7 @@ export let removeWorkspaceImprovement: (index: number) => void;
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-input text-muted-foreground hover:border-foreground/40"
                   }`}
-                  on:click={() => setWorkspaceVerdict(verdictOption)}
+                  on:click={() => setWorkspaceVerdictValue(verdictOption)}
                 >
                   {verdictOption}
                 </button>
@@ -125,7 +254,10 @@ export let removeWorkspaceImprovement: (index: number) => void;
                 step="0.25"
                 class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={workspace.score}
-                on:input={(event) => setWorkspaceScore(Number((event.target as HTMLInputElement).value))}
+                on:input={(event) =>
+                  setWorkspaceScoreValue(
+                    Number((event.target as HTMLInputElement).value),
+                  )}
               />
               <span class="text-sm text-muted-foreground">/ {workspace.maxScore}</span>
             </div>
@@ -134,7 +266,7 @@ export let removeWorkspaceImprovement: (index: number) => void;
               <button
                 type="button"
                 class="font-semibold text-primary underline-offset-2 hover:underline"
-                on:click={() => setWorkspaceScore(suggestedScore)}
+                on:click={() => setWorkspaceScoreValue(suggestedScore)}
               >
                 Use suggested
               </button>
@@ -161,7 +293,7 @@ export let removeWorkspaceImprovement: (index: number) => void;
                 value={Math.round(rubric.achievedFraction * 100)}
                 class="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted"
                 on:input={(event) =>
-                  setWorkspaceRubricFraction(
+                  setWorkspaceRubricFractionValue(
                     rubricIndex,
                     Number((event.target as HTMLInputElement).value) / 100,
                   )}
@@ -171,7 +303,7 @@ export let removeWorkspaceImprovement: (index: number) => void;
                 placeholder="Comments for this rubric"
                 value={rubric.comments}
                 on:input={(event) =>
-                  setWorkspaceRubricComments(
+                  setWorkspaceRubricCommentsValue(
                     rubricIndex,
                     (event.target as HTMLTextAreaElement).value,
                   )}
@@ -191,7 +323,10 @@ export let removeWorkspaceImprovement: (index: number) => void;
             class="h-28 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             placeholder="Summarize the score justification"
             value={workspace.feedback}
-            on:input={(event) => setWorkspaceFeedback((event.target as HTMLTextAreaElement).value)}
+            on:input={(event) =>
+              setWorkspaceFeedbackValue(
+                (event.target as HTMLTextAreaElement).value,
+              )}
           ></textarea>
         </div>
         <div class="space-y-2">
@@ -199,7 +334,7 @@ export let removeWorkspaceImprovement: (index: number) => void;
             <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Suggested improvements
             </p>
-            <Button size="sm" variant="ghost" on:click={addWorkspaceImprovement}>
+            <Button size="sm" variant="ghost" on:click={addWorkspaceImprovementEntry}>
               Add suggestion
             </Button>
           </div>
@@ -208,30 +343,30 @@ export let removeWorkspaceImprovement: (index: number) => void;
               No suggestions yet. Click "Add suggestion" to capture actionable notes.
             </p>
           {:else}
-            <div class="space-y-2">
-              {#each workspace.improvements as improvement, improvementIndex}
-                <div class="flex gap-2">
-                  <input
-                    class="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    placeholder={`Suggestion ${improvementIndex + 1}`}
-                    value={improvement}
-                    on:input={(event) =>
-                      updateWorkspaceImprovement(
-                        improvementIndex,
-                        (event.target as HTMLInputElement).value,
-                      )}
-                  />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    class="h-9 w-9"
-                    aria-label={`Remove suggestion ${improvementIndex + 1}`}
-                    on:click={() => removeWorkspaceImprovement(improvementIndex)}
-                  >
-                    ×
-                  </Button>
-                </div>
-              {/each}
+          <div class="space-y-2">
+            {#each workspace.improvements as improvement, improvementIndex}
+              <div class="flex gap-2">
+                <input
+                  class="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  placeholder={`Suggestion ${improvementIndex + 1}`}
+                  value={improvement}
+                  on:input={(event) =>
+                    updateWorkspaceImprovementEntry(
+                      improvementIndex,
+                      (event.target as HTMLInputElement).value,
+                    )}
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  class="h-9 w-9"
+                  aria-label={`Remove suggestion ${improvementIndex + 1}`}
+                  on:click={() => removeWorkspaceImprovementEntry(improvementIndex)}
+                >
+                  ×
+                </Button>
+              </div>
+            {/each}
             </div>
           {/if}
         </div>
@@ -242,14 +377,14 @@ export let removeWorkspaceImprovement: (index: number) => void;
     </div>
   {/if}
   <div class="flex flex-wrap items-center gap-2 text-xs">
-    <Button size="sm" variant="outline" on:click={copyPrompt}>
-      Copy LLM prompt
-    </Button>
-    {#if copiedPromptQuestionId === result.question.id && !promptCopyError}
+      <Button size="sm" variant="outline" on:click={copyPrompt}>
+        Copy LLM prompt
+      </Button>
+    {#if $copiedPromptQuestionId === result.question.id && !$promptCopyError}
       <span class="text-muted-foreground">Copied!</span>
     {/if}
-    {#if copiedPromptQuestionId === result.question.id && promptCopyError}
-      <span class="text-destructive">{promptCopyError}</span>
+    {#if $copiedPromptQuestionId === result.question.id && $promptCopyError}
+      <span class="text-destructive">{$promptCopyError}</span>
     {/if}
   </div>
   <div class="space-y-2 rounded-md border border-dashed bg-muted/20 p-3">
@@ -263,13 +398,13 @@ export let removeWorkspaceImprovement: (index: number) => void;
       on:input={(event) => setFeedbackInput((event.target as HTMLTextAreaElement).value)}
     ></textarea>
     <div class="flex flex-wrap items-center gap-2">
-      <Button size="sm" on:click={applyFeedback}>
+      <Button size="sm" on:click={applyFeedbackForQuestion}>
         Apply feedback
       </Button>
       <Button
         size="sm"
         variant="ghost"
-        on:click={clearFeedback}
+        on:click={clearFeedbackForQuestion}
         disabled={!feedbackInput.trim() && !feedback && !feedbackError}
       >
         Clear

@@ -1,7 +1,6 @@
 <script lang="ts">
-import { createEventDispatcher, onDestroy, onMount } from "svelte";
+import { createEventDispatcher, onMount } from "svelte";
 import Button from "../components/ui/Button.svelte";
-import { buildSubjectivePrompt } from "../llm";
 import type {
   QuestionResult,
   ResultStatus,
@@ -42,33 +41,7 @@ const typeLabels: Record<string, string> = {
   subjective: "Subjective",
 };
 
-const {
-  inputs: llmFeedbackInputs,
-  results: llmFeedbackResults,
-  errors: llmFeedbackErrors,
-  workspaces: llmWorkspaces,
-  workspaceErrors: llmWorkspaceErrors,
-  workspaceVisibility: llmWorkspaceVisibility,
-  copiedPromptQuestionId,
-  promptCopyError,
-  setInput: setLlmFeedbackInput,
-  applyFeedback: applyStoredLlmFeedback,
-  clearFeedback: clearStoredLlmFeedback,
-  initializeWorkspace,
-  setWorkspaceVerdict,
-  setWorkspaceScore,
-  setWorkspaceFeedback,
-  setWorkspaceRubricFraction,
-  setWorkspaceRubricComments,
-  addWorkspaceImprovement,
-  updateWorkspaceImprovement,
-  removeWorkspaceImprovement,
-  writeWorkspaceToInput,
-  hydrateWorkspaceFromFeedback,
-  setCopiedPromptQuestionId,
-  setPromptCopyError,
-  toggleWorkspaceVisibility,
-} = llm;
+const { results: llmFeedbackResults, initializeWorkspace } = llm;
 
 let baseSummary: SubmissionSummary | null = null;
 let summary: SubmissionSummary | null = null;
@@ -81,7 +54,6 @@ let sortMode: "original" | "status" | "question" = "original";
 let searchTerm = "";
 let comparisonAttemptId: string | null = null;
 let comparisonCandidates: SubmissionSummary[] = [];
-let promptCopyTimeout: number | null = null;
 let showDiffHighlight = true;
 let showFeedbackDetails = false;
 let scoreMixSegments: { label: string; value: number; colorClass: string }[] =
@@ -277,15 +249,6 @@ onMount(() => {
   return () => window.removeEventListener("keydown", handler);
 });
 
-onDestroy(() => {
-  if (promptCopyTimeout) {
-    window.clearTimeout(promptCopyTimeout);
-    promptCopyTimeout = null;
-  }
-  setCopiedPromptQuestionId(null);
-  setPromptCopyError(null);
-});
-
 function closeReview() {
   dispatch("close");
 }
@@ -346,67 +309,6 @@ function applyFeedbackToSummary(
   ).length;
 
   return { ...attemptSummary, results, pendingSubjectiveCount };
-}
-
-async function copySubjectivePrompt(result: QuestionResult) {
-  if (promptCopyTimeout) {
-    window.clearTimeout(promptCopyTimeout);
-  }
-  setCopiedPromptQuestionId(result.question.id);
-  try {
-    if (!result.requiresManualGrading) {
-      throw new Error("Only subjective questions provide prompts.");
-    }
-    const prompt = buildSubjectivePrompt({
-      question: result.question,
-      userAnswer: result.userAnswer,
-      maxScore: result.max,
-    });
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(prompt);
-    } else {
-      const textarea = document.createElement("textarea");
-      textarea.value = prompt;
-      textarea.setAttribute("readonly", "");
-      textarea.style.position = "absolute";
-      textarea.style.left = "-9999px";
-      document.body.append(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-    }
-    setPromptCopyError(null);
-  } catch (error) {
-    setPromptCopyError(
-      error instanceof Error
-        ? error.message
-        : "Unable to copy prompt to clipboard.",
-    );
-  }
-  promptCopyTimeout = window.setTimeout(() => {
-    setCopiedPromptQuestionId(null);
-    setPromptCopyError(null);
-    promptCopyTimeout = null;
-  }, 3000);
-}
-
-function applyLlmFeedback(result: QuestionResult) {
-  if (!result.requiresManualGrading) return;
-  applyStoredLlmFeedback(result.question.id, result.max);
-}
-
-function clearLlmFeedback(questionId: string) {
-  clearStoredLlmFeedback(questionId);
-}
-
-function insertWorkspaceJson(questionId: string) {
-  writeWorkspaceToInput(questionId);
-}
-
-function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
-  const feedback = $llmFeedbackResults[questionId];
-  if (!feedback) return;
-  hydrateWorkspaceFromFeedback(questionId, feedback, maxScore);
 }
 </script>
 
@@ -475,29 +377,6 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
             bind:showFeedbackDetails
             answerDiffTokens={answerDiffTokens}
             diffSummary={diffSummary}
-            llmInputs={$llmFeedbackInputs}
-            llmErrors={$llmFeedbackErrors}
-            llmResults={$llmFeedbackResults}
-            llmWorkspaces={$llmWorkspaces}
-            llmWorkspaceErrors={$llmWorkspaceErrors}
-            llmWorkspaceVisibility={$llmWorkspaceVisibility}
-            copiedPromptQuestionId={$copiedPromptQuestionId}
-            promptCopyError={$promptCopyError}
-            onCopyPrompt={copySubjectivePrompt}
-            onApplyFeedback={applyLlmFeedback}
-            onClearFeedback={clearLlmFeedback}
-            onInsertWorkspaceJson={insertWorkspaceJson}
-            onLoadWorkspaceFromApplied={loadWorkspaceFromApplied}
-            onToggleWorkspaceVisibility={toggleWorkspaceVisibility}
-            onSetFeedbackInput={setLlmFeedbackInput}
-            onSetWorkspaceVerdict={setWorkspaceVerdict}
-            onSetWorkspaceScore={setWorkspaceScore}
-            onSetWorkspaceFeedback={setWorkspaceFeedback}
-            onSetWorkspaceRubricFraction={setWorkspaceRubricFraction}
-            onSetWorkspaceRubricComments={setWorkspaceRubricComments}
-            onAddWorkspaceImprovement={addWorkspaceImprovement}
-            onUpdateWorkspaceImprovement={updateWorkspaceImprovement}
-            onRemoveWorkspaceImprovement={removeWorkspaceImprovement}
           />
         {:else if summary}
           <div class="rounded-lg border bg-card/70 p-6 text-sm text-muted-foreground">
