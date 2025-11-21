@@ -1,3 +1,5 @@
+import { triggerDownload } from "./utils/download";
+
 export interface CsvSummary {
   assessmentTitle: string;
   deterministicScore: number;
@@ -90,13 +92,5 @@ export function buildCsv(
 }
 
 export function downloadCsv(filename: string, content: string): void {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  triggerDownload(filename, [content], "text/csv;charset=utf-8");
 }

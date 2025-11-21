@@ -43,6 +43,9 @@ import {
   navigate,
   routePath,
 } from "./lib/stores/router";
+import { formatCountdown } from "./lib/utils/time";
+import { triggerDownload } from "./lib/utils/download";
+import { storageNotice } from "./lib/storage-notices";
 
 let questionElement: HTMLDivElement | null = null;
 let requireAllAnsweredChecked = false;
@@ -119,7 +122,9 @@ $: if (submitted) {
 $: reviewAttemptId = parseReviewPath($routePath);
 $: requireAllAnsweredChecked = $requireAllAnswered;
 $: timeDisplay =
-  timeRemaining !== null ? formatTime(timeRemaining) : formatTime(elapsedSec);
+  timeRemaining !== null
+    ? formatCountdown(timeRemaining)
+    : formatCountdown(elapsedSec);
 $: assessment = $assessmentStore;
 $: questions = $questionsStore;
 $: answers = $answersStore;
@@ -135,15 +140,7 @@ $: submitted = $submittedStore;
 $: submission = $submissionStore;
 $: submitDisabledValue = $submitDisabled;
 
-function formatTime(sec: number): string {
-  const minutes = Math.floor(sec / 60)
-    .toString()
-    .padStart(2, "0");
-  const seconds = Math.floor(sec % 60)
-    .toString()
-    .padStart(2, "0");
-  return `${minutes}:${seconds}`;
-}
+const formatTime = formatCountdown;
 
 function parseReviewPath(path: string): string | null {
   if (!path) return null;
@@ -260,36 +257,30 @@ function sanitizeFilename(value: string): string {
   return value.replace(/[^a-z0-9-_]+/gi, "-");
 }
 
+function downloadJsonFile(filename: string, payload: unknown) {
+  triggerDownload(
+    filename,
+    [`${JSON.stringify(payload, null, 2)}\n`],
+    "application/json;charset=utf-8",
+  );
+}
+
 function downloadExampleAssessment(id: string) {
   const example = findExampleAssessment(id);
   if (!example) return;
 
-  const blob = new Blob([`${JSON.stringify(example.data, null, 2)}\n`], {
-    type: "application/json;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${sanitizeFilename(example.data.meta.title)}.json`;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  downloadJsonFile(
+    `${sanitizeFilename(example.data.meta.title)}.json`,
+    example.data,
+  );
 }
 
 function exportAssessment() {
   if (!assessment) return;
-  const blob = new Blob([JSON.stringify(assessment, null, 2)], {
-    type: "application/json;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${sanitizeFilename(assessment.meta.title)}.json`;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  downloadJsonFile(
+    `${sanitizeFilename(assessment.meta.title)}.json`,
+    assessment,
+  );
 }
 
 function exportJsonSummary() {
@@ -351,17 +342,10 @@ function exportJsonSummary() {
       },
     ),
   };
-  const blob = new Blob([`${JSON.stringify(data, null, 2)}\n`], {
-    type: "application/json;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${sanitizeFilename(assessed.meta.title)}-summary.json`;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  downloadJsonFile(
+    `${sanitizeFilename(assessed.meta.title)}-summary.json`,
+    data,
+  );
 }
 </script>
 
@@ -405,6 +389,13 @@ function exportJsonSummary() {
       {/if}
 
       <section class="flex-1 space-y-6">
+        {#if $storageNotice}
+          <Alert>
+            <p class="font-medium">Storage notice</p>
+            <p class="text-sm text-muted-foreground">{$storageNotice}</p>
+          </Alert>
+        {/if}
+
         {#if parseErrors.length > 0}
           <Alert>
             <p class="font-medium">Unable to load assessment:</p>
