@@ -10,6 +10,7 @@ type FeedbackErrors = Record<string, string | null>;
 type FeedbackResults = Record<string, LlmFeedback | undefined>;
 type WorkspaceMap = Record<string, GradingWorkspace | undefined>;
 type WorkspaceErrors = Record<string, string | null>;
+type WorkspaceVisibilityMap = Record<string, boolean | undefined>;
 
 type RubricWorkspaceEntry = {
   rubric: string;
@@ -29,6 +30,44 @@ type GradingWorkspace = {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+const WORKSPACE_VISIBILITY_STORAGE_KEY =
+  "solo-quiz-llm-workspace-visibility-v1";
+
+function loadWorkspaceVisibility(): WorkspaceVisibilityMap {
+  if (typeof localStorage === "undefined") {
+    return {};
+  }
+
+  try {
+    const stored = localStorage.getItem(WORKSPACE_VISIBILITY_STORAGE_KEY);
+    if (!stored) return {};
+    const parsed = JSON.parse(stored) as WorkspaceVisibilityMap;
+    if (parsed && typeof parsed === "object") {
+      return { ...parsed };
+    }
+    return {};
+  } catch (error) {
+    console.warn(
+      "Unable to parse workspace visibility settings; resetting",
+      error,
+    );
+    localStorage.removeItem(WORKSPACE_VISIBILITY_STORAGE_KEY);
+    return {};
+  }
+}
+
+function saveWorkspaceVisibility(value: WorkspaceVisibilityMap) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(
+      WORKSPACE_VISIBILITY_STORAGE_KEY,
+      JSON.stringify(value),
+    );
+  } catch (error) {
+    console.warn("Unable to persist workspace visibility", error);
+  }
 }
 
 function buildWorkspace(
@@ -85,6 +124,13 @@ function createLlmStore() {
   const promptCopyError = writable<string | null>(null);
   const workspaces = writable<WorkspaceMap>({});
   const workspaceErrors = writable<WorkspaceErrors>({});
+  const workspaceVisibility = writable<WorkspaceVisibilityMap>(
+    loadWorkspaceVisibility(),
+  );
+
+  workspaceVisibility.subscribe((value) => {
+    saveWorkspaceVisibility(value);
+  });
 
   function reset() {
     inputs.set({});
@@ -221,6 +267,7 @@ function createLlmStore() {
   function hydrateWorkspaceFromFeedback(
     questionId: string,
     feedback: LlmFeedback,
+    maxScore: number,
   ) {
     workspaces.update((prev) => {
       const existing = prev[questionId];
@@ -240,8 +287,8 @@ function createLlmStore() {
         ...prev,
         [questionId]: {
           verdict: feedback.verdict,
-          score: clamp(feedback.score, 0, feedback.maxScore),
-          maxScore: feedback.maxScore,
+          score: clamp(feedback.score, 0, maxScore),
+          maxScore,
           feedback: feedback.feedback,
           improvements: feedback.improvements ?? [],
           rubricBreakdown,
@@ -276,7 +323,7 @@ function createLlmStore() {
     }
   }
 
-  function applyFeedback(questionId: string) {
+  function applyFeedback(questionId: string, maxScore: number) {
     const raw = get(inputs)[questionId]?.trim();
     if (!raw) {
       errors.update((prev) => ({
@@ -290,9 +337,14 @@ function createLlmStore() {
     try {
       const parsed = JSON.parse(raw);
       const feedback = llmFeedbackSchema.parse(parsed) as LlmFeedback;
-      results.update((prev) => ({ ...prev, [questionId]: feedback }));
+      const sanitized: LlmFeedback = {
+        ...feedback,
+        maxScore,
+        score: clamp(feedback.score, 0, maxScore),
+      };
+      results.update((prev) => ({ ...prev, [questionId]: sanitized }));
       errors.update((prev) => ({ ...prev, [questionId]: null }));
-      hydrateWorkspaceFromFeedback(questionId, feedback);
+      hydrateWorkspaceFromFeedback(questionId, sanitized, maxScore);
       workspaceErrors.update((prev) => ({ ...prev, [questionId]: null }));
     } catch (error) {
       const message =
@@ -319,12 +371,20 @@ function createLlmStore() {
     promptCopyError.set(message);
   }
 
+  function toggleWorkspaceVisibility(questionId: string) {
+    workspaceVisibility.update((prev) => ({
+      ...prev,
+      [questionId]: !prev[questionId],
+    }));
+  }
+
   return {
     inputs,
     errors,
     results,
     workspaces,
     workspaceErrors,
+    workspaceVisibility,
     copiedPromptQuestionId,
     promptCopyError,
     reset,
@@ -344,6 +404,7 @@ function createLlmStore() {
     clearFeedback,
     setCopiedPromptQuestionId,
     setPromptCopyError,
+    toggleWorkspaceVisibility,
   };
 }
 
