@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { derived, get, writable } from "svelte/store";
+import { MAX_STORED_ATTEMPTS, STORAGE_KEYS } from "../constants";
 import { reportStorageIssue } from "../storage-notices";
 import {
   isIndexedDbAvailable,
@@ -9,10 +10,7 @@ import {
 } from "../utils/persistence";
 import type { SubmissionSummary } from "../results";
 
-const MAX_ATTEMPTS = 10;
-const DB_NAME = "solo-quiz-attempts";
-const STORE_ATTEMPTS = "attempts";
-const LOCAL_STORAGE_KEY = "solo-quiz-attempts-v1";
+const { attemptsDbName, attemptsStore, attemptsLocal } = STORAGE_KEYS;
 
 type StoredSubmissionSummary = Omit<
   SubmissionSummary,
@@ -20,7 +18,7 @@ type StoredSubmissionSummary = Omit<
 > & { startedAt: number; completedAt: number };
 
 interface AttemptsDB extends DBSchema {
-  [STORE_ATTEMPTS]: {
+  [attemptsStore]: {
     key: string;
     value: StoredSubmissionSummary;
   };
@@ -33,10 +31,10 @@ async function getDb(): Promise<IDBPDatabase<AttemptsDB> | null> {
   if (!isIndexedDbAvailable()) return null;
 
   if (!dbPromise) {
-    dbPromise = openDB<AttemptsDB>(DB_NAME, 1, {
+    dbPromise = openDB<AttemptsDB>(attemptsDbName, 1, {
       upgrade(db) {
-        if (!db.objectStoreNames.contains(STORE_ATTEMPTS)) {
-          db.createObjectStore(STORE_ATTEMPTS, { keyPath: "id" });
+        if (!db.objectStoreNames.contains(attemptsStore)) {
+          db.createObjectStore(attemptsStore, { keyPath: "id" });
         }
       },
     }).catch((error) => {
@@ -81,13 +79,13 @@ function isStoredAttempt(value: unknown): value is StoredSubmissionSummary {
 
 function readLocalAttempts(): StoredSubmissionSummary[] {
   if (typeof localStorage === "undefined") return [...memoryAttempts];
-  const stored = safeLocalStorageGet(LOCAL_STORAGE_KEY);
+  const stored = safeLocalStorageGet(attemptsLocal);
   if (!stored) return [...memoryAttempts];
 
   try {
     const parsed = JSON.parse(stored);
     if (!Array.isArray(parsed)) {
-      safeLocalStorageRemove(LOCAL_STORAGE_KEY);
+      safeLocalStorageRemove(attemptsLocal);
       return [...memoryAttempts];
     }
     const filtered = parsed.filter(isStoredAttempt);
@@ -97,7 +95,7 @@ function readLocalAttempts(): StoredSubmissionSummary[] {
     reportStorageIssue(
       "We could not load your previous attempts from storage.",
     );
-    safeLocalStorageRemove(LOCAL_STORAGE_KEY);
+    safeLocalStorageRemove(attemptsLocal);
     return [...memoryAttempts];
   }
 }
@@ -109,10 +107,10 @@ function persistSnapshot(entries: StoredSubmissionSummary[]): void {
   if (typeof localStorage === "undefined") return;
   try {
     if (entries.length === 0) {
-      safeLocalStorageRemove(LOCAL_STORAGE_KEY);
+      safeLocalStorageRemove(attemptsLocal);
       return;
     }
-    safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(entries));
+    safeLocalStorageSet(attemptsLocal, JSON.stringify(entries));
   } catch (error) {
     console.warn("Unable to persist attempts to localStorage", error);
     reportStorageIssue("We could not save your attempts locally.");
@@ -122,7 +120,7 @@ function persistSnapshot(entries: StoredSubmissionSummary[]): void {
 async function getAttemptsFromDb(
   db: IDBPDatabase<AttemptsDB>,
 ): Promise<StoredSubmissionSummary[]> {
-  const tx = db.transaction(STORE_ATTEMPTS, "readonly");
+  const tx = db.transaction(attemptsStore, "readonly");
   const all = await tx.store.getAll();
   return all;
 }
@@ -146,7 +144,7 @@ function toLimitedMap(
   const sorted = [...list].sort(
     (a, b) => b.completedAt.getTime() - a.completedAt.getTime(),
   );
-  const trimmed = sorted.slice(0, MAX_ATTEMPTS);
+  const trimmed = sorted.slice(0, MAX_STORED_ATTEMPTS);
   return new Map(trimmed.map((attempt) => [attempt.id, attempt]));
 }
 
@@ -160,7 +158,7 @@ async function persistAttempt(summary: SubmissionSummary) {
     return;
   }
 
-  const tx = db.transaction(STORE_ATTEMPTS, "readwrite");
+  const tx = db.transaction(attemptsStore, "readwrite");
   await tx.store.put(stored);
   await tx.done;
   const snapshot = toLimitedSnapshot(await getAttemptsFromDb(db));
@@ -172,7 +170,7 @@ function toLimitedSnapshot(
 ): StoredSubmissionSummary[] {
   return [...list]
     .sort((a, b) => b.completedAt - a.completedAt)
-    .slice(0, MAX_ATTEMPTS);
+    .slice(0, MAX_STORED_ATTEMPTS);
 }
 
 async function clearPersistedAttempts() {
@@ -182,7 +180,7 @@ async function clearPersistedAttempts() {
     return;
   }
 
-  const tx = db.transaction(STORE_ATTEMPTS, "readwrite");
+  const tx = db.transaction(attemptsStore, "readwrite");
   await tx.store.clear();
   await tx.done;
   persistSnapshot([]);

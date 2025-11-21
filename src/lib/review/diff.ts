@@ -7,10 +7,26 @@ function tokenizeAnswer(text: string): string[] {
   return text.trim().length === 0 ? [] : text.trim().split(/\s+/);
 }
 
+const diffCache = new Map<string, DiffToken[]>();
+
+function cacheKey(userText: string, referenceText: string) {
+  return `${userText}\u241f${referenceText}`;
+}
+
+/**
+ * Computes a longest-common-subsequence diff of two answers, returning tokens
+ * tagged with whether they matched, were added, or were removed. The function
+ * is memoized to avoid recomputing for the same pair of answers when toggling
+ * diff highlighting in the review UI.
+ */
 export function buildDiffTokens(
   userText: string,
   referenceText: string,
 ): DiffToken[] {
+  const key = cacheKey(userText, referenceText);
+  const cached = diffCache.get(key);
+  if (cached) return cached;
+
   const userTokens = tokenizeAnswer(userText);
   const referenceTokens = tokenizeAnswer(referenceText);
 
@@ -58,6 +74,7 @@ export function buildDiffTokens(
     j += 1;
   }
 
+  diffCache.set(key, tokens);
   return tokens;
 }
 

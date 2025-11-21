@@ -64,6 +64,7 @@ let submitted = false;
 let submission: SubmissionSummary | null = null;
 let submitDisabledValue = false;
 let reviewAttemptId: string | null = null;
+let navigationAnnouncement = "";
 const theme = preferences.theme;
 const panelVisibility = preferences.panelVisibility;
 const sidebarVisible = preferences.sidebarVisible;
@@ -208,11 +209,61 @@ function questionNavStyles(question: Question, index: number): string {
   return "border-border";
 }
 
+function questionNavStatus(
+  question: Question,
+  index: number,
+): { label: string; indicator: string } {
+  const position = index + 1;
+  if (index === currentIndex) {
+    return {
+      label: `Question ${position} (current)`,
+      indicator: "●",
+    };
+  }
+
+  if (submission) {
+    const result = submission.results[index];
+    if (!result) {
+      return {
+        label: `Question ${position} status unavailable`,
+        indicator: "–",
+      };
+    }
+    if (result.status === "correct") {
+      return {
+        label: `Question ${position} answered correctly`,
+        indicator: "✔",
+      };
+    }
+    if (result.status === "incorrect") {
+      return {
+        label: `Question ${position} answered incorrectly`,
+        indicator: "✖",
+      };
+    }
+    return { label: `Question ${position} pending review`, indicator: "…" };
+  }
+
+  if (touchedQuestions.has(question.id)) {
+    return { label: `Question ${position} answered`, indicator: "•" };
+  }
+
+  return { label: `Question ${position} not answered`, indicator: "○" };
+}
+
+/**
+ * Moves focus to the requested question card and surfaces an aria-live
+ * announcement so screen readers acknowledge the navigation change.
+ */
 async function navigateTo(index: number) {
   if (index < 0 || index >= questions.length) return;
   setCurrentIndex(index);
   await tick();
   questionElement?.focus();
+  const questionText = questions[index]?.text?.trim();
+  navigationAnnouncement = `Moved to question ${index + 1} of ${
+    questions.length
+  }${questionText ? `: ${questionText}` : ""}`;
 }
 
 function exportCsv() {
@@ -368,6 +419,8 @@ function exportJsonSummary() {
       cycleTheme={cycleTheme}
     />
 
+    <div class="sr-only" aria-live="polite">{navigationAnnouncement}</div>
+
     <main class={`mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 ${$sidebarVisible ? "lg:flex-row" : ""}`}>
       {#if $sidebarVisible}
         <AppSidebar
@@ -382,6 +435,7 @@ function exportJsonSummary() {
           clearHistory={clearHistory}
           {questions}
           {questionNavStyles}
+          {questionNavStatus}
           {navigateTo}
           downloadExampleAssessment={downloadExampleAssessment}
           handleFile={handleFile}

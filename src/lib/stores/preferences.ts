@@ -1,12 +1,15 @@
 import { writable } from "svelte/store";
+import { STORAGE_KEYS } from "../constants";
 
 export type Theme = "light" | "dark";
 export type PanelKey = "assessment" | "recents" | "questions";
 export type PanelVisibility = Record<PanelKey, boolean>;
 
-const PANEL_STORAGE_KEY = "solo-quiz-panel-visibility-v1";
-const SIDEBAR_STORAGE_KEY = "solo-quiz-sidebar-visible-v1";
-const THEME_STORAGE_KEY = "solo-quiz-theme";
+const {
+  panelVisibility: PANEL_STORAGE_KEY,
+  sidebarVisible: SIDEBAR_STORAGE_KEY,
+  theme: THEME_STORAGE_KEY,
+} = STORAGE_KEYS;
 
 const DEFAULT_PANEL_VISIBILITY: PanelVisibility = {
   assessment: false,
