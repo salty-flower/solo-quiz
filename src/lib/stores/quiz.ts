@@ -133,10 +133,13 @@ function createQuizStore() {
     return result;
   }
 
-  function applyAssessment(data: Assessment) {
+  function applyAssessment(
+    data: Assessment,
+    options?: { questions?: Question[] },
+  ) {
     stopTimer();
     assessment.set(data);
-    const baseQuestions = data.questions;
+    const baseQuestions = options?.questions ?? data.questions;
     const orderedQuestions = data.meta.shuffleQuestions
       ? shuffle(baseQuestions)
       : [...baseQuestions];
@@ -291,6 +294,17 @@ function createQuizStore() {
     navigate(getReviewPath(summary.id));
   }
 
+  function retakeIncorrectQuestions(previous: SubmissionSummary) {
+    const needsRetake = previous.results.filter(
+      (result) => result.status !== "correct",
+    );
+    const questionPool =
+      needsRetake.length > 0
+        ? needsRetake.map((result) => result.question)
+        : previous.assessment.questions;
+    applyAssessment(previous.assessment, { questions: questionPool });
+  }
+
   function resetAssessment() {
     const current = get(assessment);
     if (!current) return;
@@ -338,6 +352,7 @@ function createQuizStore() {
     setCurrentIndex,
     setRequireAllAnswered,
     submitQuiz,
+    retakeIncorrectQuestions,
     resetAssessment,
     clearHistory,
     teardown,

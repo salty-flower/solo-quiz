@@ -9,6 +9,7 @@ export let exportCsv: () => void;
 export let exportJsonSummary: () => void;
 export let exportAssessment: () => void;
 export let resetAssessment: () => void;
+export let retakeIncorrect: () => void;
 </script>
 
 <div class="rounded-lg border bg-card p-4 text-sm">
@@ -40,6 +41,9 @@ export let resetAssessment: () => void;
         Export JSON summary
       </Button>
       <Button size="sm" variant="outline" on:click={exportAssessment}>Download assessment JSON</Button>
+      <Button size="sm" variant="secondary" on:click={retakeIncorrect}>
+        Retake incorrect
+      </Button>
       <Button size="sm" variant="ghost" on:click={resetAssessment}>Retake quiz</Button>
     </div>
   </div>

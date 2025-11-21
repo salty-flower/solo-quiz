@@ -1,5 +1,5 @@
 <script lang="ts">
-import { createEventDispatcher, onDestroy } from "svelte";
+import { createEventDispatcher, onDestroy, onMount } from "svelte";
 import Button from "../components/ui/Button.svelte";
 import {
   Card,
@@ -19,6 +19,7 @@ import type {
 } from "../results";
 import { attempts } from "../stores/attempts";
 import { llm } from "../stores/llm";
+import { getReviewPath, navigate } from "../stores/router";
 
 export let attemptId: string;
 
@@ -37,6 +38,14 @@ const statusPalette: Record<
   incorrect: { label: "Incorrect", colorClass: "bg-destructive" },
   pending: { label: "Pending", colorClass: "bg-amber-400" },
 };
+
+const statusSortOrder: Record<ResultStatus, number> = {
+  incorrect: 0,
+  pending: 1,
+  correct: 2,
+};
+
+const searchInputId = "review-search-filter";
 
 const typeLabels: Record<string, string> = {
   single: "Single choice",
@@ -78,6 +87,15 @@ const {
 let summary: SubmissionSummary | null = null;
 let activeIndex = 0;
 let currentResult: QuestionResult | null = null;
+let visibleEntries: { result: QuestionResult; index: number }[] = [];
+let visibleIndices: number[] = [];
+let statusFilter: ResultStatus | "all" = "all";
+let sortMode: "original" | "status" | "question" = "original";
+let searchTerm = "";
+let comparisonAttemptId: string | null = null;
+let comparisonSummary: SubmissionSummary | null = null;
+let comparisonOptions: SubmissionSummary[] = [];
+let comparisonCandidates: SubmissionSummary[] = [];
 let promptCopyTimeout: number | null = null;
 let showDiffHighlight = true;
 let showFeedbackDetails = false;
@@ -112,10 +130,80 @@ $: if (!summary) {
 ) {
   activeIndex = summary.results.length - 1;
 }
-$: currentResult =
-  summary && summary.results.length > 0
-    ? summary.results[Math.min(activeIndex, summary.results.length - 1)]
-    : null;
+$: comparisonOptions = Array.from($attempts.values()).sort(
+  (a, b) => b.completedAt.getTime() - a.completedAt.getTime(),
+);
+$: comparisonCandidates = comparisonOptions.filter(
+  (attempt) =>
+    attempt.id !== attemptId &&
+    (!summary ||
+      attempt.assessment.meta.title === summary.assessment.meta.title),
+);
+$: if (comparisonCandidates.length === 0) {
+  comparisonAttemptId = null;
+  comparisonSummary = null;
+} else if (
+  !comparisonAttemptId ||
+  !comparisonCandidates.some((attempt) => attempt.id === comparisonAttemptId)
+) {
+  comparisonAttemptId = comparisonCandidates[0].id;
+  comparisonSummary = comparisonCandidates[0];
+} else {
+  comparisonSummary =
+    comparisonCandidates.find(
+      (attempt) => attempt.id === comparisonAttemptId,
+    ) ?? null;
+}
+$: {
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  visibleEntries = summary
+    ? summary.results
+        .map((result, index) => ({ result, index }))
+        .filter(
+          ({ result }) =>
+            statusFilter === "all" || result.status === statusFilter,
+        )
+        .filter(({ result }) => {
+          if (!normalizedSearch) return true;
+          const haystack = [
+            result.question.text,
+            result.userAnswer,
+            result.correctAnswer,
+            result.question.tags?.join(" ") ?? "",
+          ]
+            .join(" \n")
+            .toLowerCase();
+          return haystack.includes(normalizedSearch);
+        })
+        .sort((a, b) => {
+          if (sortMode === "status") {
+            return (
+              statusSortOrder[a.result.status] -
+                statusSortOrder[b.result.status] || a.index - b.index
+            );
+          }
+          if (sortMode === "question") {
+            return a.result.question.text.localeCompare(b.result.question.text);
+          }
+          return a.index - b.index;
+        })
+    : [];
+  visibleIndices = visibleEntries.map((entry) => entry.index);
+  if (
+    summary &&
+    visibleEntries.length > 0 &&
+    !visibleIndices.includes(activeIndex)
+  ) {
+    activeIndex = visibleIndices[0];
+  }
+}
+$: if (summary && summary.results.length > 0) {
+  const boundedIndex = Math.min(activeIndex, summary.results.length - 1);
+  currentResult =
+    visibleEntries.length > 0 ? summary.results[boundedIndex] : null;
+} else {
+  currentResult = null;
+}
 $: if (currentResult?.requiresManualGrading) {
   initializeWorkspace(currentResult.question.id, {
     rubrics: currentResult.rubrics,
@@ -173,6 +261,29 @@ $: diffSummary = answerDiffTokens.reduce(
   { match: 0, add: 0, remove: 0 } as Record<DiffToken["type"], number>,
 );
 
+onMount(() => {
+  const handler = (event: KeyboardEvent) => {
+    const target = event.target as HTMLElement | null;
+    const tagName = target?.tagName?.toLowerCase();
+    if (
+      tagName === "input" ||
+      tagName === "textarea" ||
+      target?.isContentEditable
+    ) {
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      moveSelection(1);
+    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      moveSelection(-1);
+    }
+  };
+  window.addEventListener("keydown", handler);
+  return () => window.removeEventListener("keydown", handler);
+});
+
 onDestroy(() => {
   if (promptCopyTimeout) {
     window.clearTimeout(promptCopyTimeout);
@@ -189,6 +300,24 @@ function closeReview() {
 function selectQuestion(index: number) {
   if (!summary) return;
   activeIndex = Math.max(0, Math.min(index, summary.results.length - 1));
+}
+
+function moveSelection(delta: number) {
+  if (!summary || visibleIndices.length === 0) return;
+  const currentPosition = visibleIndices.indexOf(activeIndex);
+  const nextPosition =
+    currentPosition === -1
+      ? 0
+      : Math.min(
+          visibleIndices.length - 1,
+          Math.max(0, currentPosition + delta),
+        );
+  activeIndex = visibleIndices[nextPosition];
+}
+
+function openComparisonReview(id: string | null) {
+  if (!id) return;
+  navigate(getReviewPath(id));
 }
 
 function formatTime(sec: number): string {
@@ -445,6 +574,71 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
     </header>
 
     <section class="mx-auto w-full max-w-6xl space-y-4 px-4 py-6">
+      <div class="rounded-lg border bg-card/70 p-4 shadow-sm">
+        <div class="flex flex-wrap items-center gap-3">
+          <div>
+            <p class="text-xs uppercase text-muted-foreground">Attempt history</p>
+            <p class="text-sm text-muted-foreground">
+              Compare this run against earlier attempts on the same assessment.
+            </p>
+          </div>
+          {#if comparisonCandidates.length > 0}
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+              <select
+                class="rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                bind:value={comparisonAttemptId}
+                aria-label="Choose attempt to compare"
+              >
+                {#each comparisonCandidates as attempt (attempt.id)}
+                  <option value={attempt.id}>
+                    {formatter.format(attempt.completedAt)} — {attempt.deterministicPercentage.toFixed(1)}%
+                  </option>
+                {/each}
+              </select>
+              <Button size="sm" variant="outline" on:click={() => openComparisonReview(comparisonAttemptId)}>
+                View attempt
+              </Button>
+            </div>
+          {/if}
+        </div>
+
+        {#if comparisonCandidates.length === 0}
+          <p class="mt-2 text-sm text-muted-foreground">
+            No other attempts recorded for this assessment yet. Finish a run to unlock comparisons.
+          </p>
+        {:else}
+          <div class="mt-4 grid gap-4 md:grid-cols-2">
+            <div class="rounded-md border bg-background/70 p-3 text-sm">
+              <p class="text-xs uppercase text-muted-foreground">Current attempt</p>
+              <p class="font-semibold text-foreground">{summary.assessment.meta.title}</p>
+              <ul class="mt-2 space-y-1 text-xs text-muted-foreground">
+                <li>Deterministic: {summary.deterministicEarned} / {summary.deterministicMax}</li>
+                <li>Subjective pending: {summary.subjectiveMax}</li>
+                <li>Elapsed: {formatTime(summary.elapsedSec)}</li>
+              </ul>
+            </div>
+            <div class="rounded-md border bg-background/70 p-3 text-sm">
+              <p class="text-xs uppercase text-muted-foreground">Comparison attempt</p>
+              {#if comparisonSummary}
+                <p class="font-semibold text-foreground">{comparisonSummary.assessment.meta.title}</p>
+                <ul class="mt-2 space-y-1 text-xs text-muted-foreground">
+                  <li>
+                    Deterministic: {comparisonSummary.deterministicEarned} /
+                    {comparisonSummary.deterministicMax}
+                  </li>
+                  <li>Subjective pending: {comparisonSummary.subjectiveMax}</li>
+                  <li>Elapsed: {formatTime(comparisonSummary.elapsedSec)}</li>
+                </ul>
+              {:else}
+                <p class="text-xs text-muted-foreground">Select an attempt to compare.</p>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+    </section>
+
+    <section class="mx-auto w-full max-w-6xl space-y-4 px-4 py-6">
       <div class="grid gap-4 lg:grid-cols-3">
         <div class="rounded-lg border bg-card/70 p-4 shadow-sm">
           <p class="text-xs uppercase text-muted-foreground">Score mix</p>
@@ -508,28 +702,80 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
     <main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 lg:flex-row">
       <aside class="lg:w-72">
         <div class="rounded-lg border bg-card">
-          <div class="border-b px-4 py-3 text-sm font-semibold">Question navigator</div>
-          <div class="max-h-[70vh] space-y-2 overflow-y-auto p-3">
-            {#each summary.results as result, index}
-              {@const meta = statusMeta(result)}
-              <button
-                class={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                  activeIndex === index
-                    ? "border-primary bg-primary/10"
-                    : "border-transparent hover:border-input"
-                }`}
-                aria-current={activeIndex === index ? "true" : undefined}
-                on:click={() => selectQuestion(index)}
+          <div class="space-y-3 border-b px-4 py-3">
+            <div class="flex items-center justify-between text-sm font-semibold">
+              <span>Question navigator</span>
+              <span class="text-xs font-normal text-muted-foreground">Arrow keys supported</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              {#each [
+                { value: "all", label: "All" },
+                { value: "incorrect", label: "Incorrect" },
+                { value: "pending", label: "Pending" },
+                { value: "correct", label: "Correct" },
+              ] as filter}
+                <button
+                  class={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    statusFilter === filter.value
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:border-input"
+                  }`}
+                  on:click={() => (statusFilter = filter.value as ResultStatus | "all")}
+                >
+                  {filter.label}
+                </button>
+              {/each}
+            </div>
+            <div class="space-y-2 text-xs">
+              <label
+                class="font-semibold uppercase tracking-wide text-muted-foreground"
+                for={searchInputId}
               >
-                <div class="flex items-center justify-between gap-2 text-xs">
-                  <span class="font-semibold text-foreground">Question {index + 1}</span>
-                  <span class={`font-semibold ${meta.textClass}`}>{meta.label}</span>
-                </div>
-                <div class="mt-1 text-xs text-muted-foreground">
-                  {@html renderWithKatex(result.question.text)}
-                </div>
-              </button>
-            {/each}
+                Search & sort
+              </label>
+              <input
+                class="w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                placeholder="Search text, tags, or answers"
+                id={searchInputId}
+                bind:value={searchTerm}
+                aria-label="Search results"
+              />
+              <select
+                class="w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                bind:value={sortMode}
+                aria-label="Sort results"
+              >
+                <option value="original">Original order</option>
+                <option value="status">Status</option>
+                <option value="question">Question text A–Z</option>
+              </select>
+            </div>
+          </div>
+          <div class="max-h-[70vh] space-y-2 overflow-y-auto p-3">
+            {#if visibleEntries.length === 0}
+              <p class="text-sm text-muted-foreground">No questions match the current filters.</p>
+            {:else}
+              {#each visibleEntries as entry (entry.result.question.id)}
+                {@const meta = statusMeta(entry.result)}
+                <button
+                  class={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${
+                    activeIndex === entry.index
+                      ? "border-primary bg-primary/10"
+                      : "border-transparent hover:border-input"
+                  }`}
+                  aria-current={activeIndex === entry.index ? "true" : undefined}
+                  on:click={() => selectQuestion(entry.index)}
+                >
+                  <div class="flex items-center justify-between gap-2 text-xs">
+                    <span class="font-semibold text-foreground">Question {entry.index + 1}</span>
+                    <span class={`font-semibold ${meta.textClass}`}>{meta.label}</span>
+                  </div>
+                  <div class="mt-1 text-xs text-muted-foreground">
+                    {@html renderWithKatex(entry.result.question.text)}
+                  </div>
+                </button>
+              {/each}
+            {/if}
           </div>
         </div>
       </aside>
@@ -537,12 +783,16 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
       <section class="flex-1 space-y-4">
         {#if currentResult}
           {@const meta = statusMeta(currentResult)}
+          {@const visiblePosition = Math.max(visibleIndices.indexOf(activeIndex), 0) + 1}
           <Card>
             <CardHeader>
-              <CardTitle>Question {activeIndex + 1} of {summary.results.length}</CardTitle>
-              <CardDescription className="space-y-2 text-sm">
-                <div class="space-y-2 leading-relaxed">
-                  {@html renderWithKatex(currentResult.question.text)}
+              <CardTitle>
+                Question {visiblePosition} of {visibleEntries.length}
+                <span class="text-xs font-normal text-muted-foreground">(original #{activeIndex + 1})</span>
+              </CardTitle>
+            <CardDescription className="space-y-2 text-sm">
+              <div class="space-y-2 leading-relaxed">
+                {@html renderWithKatex(currentResult.question.text)}
                 </div>
                 {#if currentResult.question.tags?.length}
                   <p class="text-xs text-muted-foreground">
@@ -779,14 +1029,17 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
                           <Button size="sm" variant="outline" on:click={() => insertWorkspaceJson(questionId)}>
                             Insert workspace JSON
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={!feedback}
-                            on:click={() => loadWorkspaceFromApplied(questionId, currentResult.max)}
-                          >
-                            Load from applied JSON
-                          </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={!feedback}
+                              on:click={() =>
+                                currentResult &&
+                                loadWorkspaceFromApplied(questionId, currentResult.max)
+                              }
+                            >
+                              Load from applied JSON
+                            </Button>
                         </div>
                       </div>
                       {#if isWorkspaceCollapsed}
@@ -947,10 +1200,14 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
                       {/if}
                     </div>
                   {/if}
-                  <div class="flex flex-wrap items-center gap-2 text-xs">
-                    <Button size="sm" variant="outline" on:click={() => copySubjectivePrompt(currentResult)}>
-                      Copy LLM prompt
-                    </Button>
+                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        on:click={() => currentResult && copySubjectivePrompt(currentResult)}
+                      >
+                        Copy LLM prompt
+                      </Button>
                     {#if $copiedPromptQuestionId === questionId && !$promptCopyError}
                       <span class="text-muted-foreground">Copied!</span>
                     {/if}
@@ -972,10 +1229,10 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
                           (event.target as HTMLTextAreaElement).value,
                         )}
                     ></textarea>
-                    <div class="flex flex-wrap items-center gap-2">
-                      <Button size="sm" on:click={() => applyLlmFeedback(currentResult)}>
-                        Apply feedback
-                      </Button>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <Button size="sm" on:click={() => currentResult && applyLlmFeedback(currentResult)}>
+                          Apply feedback
+                        </Button>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -1029,6 +1286,10 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
               {/if}
             </CardContent>
           </Card>
+        {:else if summary}
+          <div class="rounded-lg border bg-card/70 p-6 text-sm text-muted-foreground">
+            No questions match the current filters. Adjust the search or status chips to continue reviewing.
+          </div>
         {:else}
           <div class="rounded-lg border bg-card/70 p-6 text-sm text-muted-foreground">
             No questions were included in this attempt.
