@@ -9,9 +9,14 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import Separator from "../components/ui/Separator.svelte";
+import StackedBar from "../components/chart/StackedBar.svelte";
 import { renderWithKatex } from "../katex";
 import { buildSubjectivePrompt } from "../llm";
-import type { QuestionResult, SubmissionSummary } from "../results";
+import type {
+  QuestionResult,
+  ResultStatus,
+  SubmissionSummary,
+} from "../results";
 import { attempts } from "../stores/attempts";
 import { llm } from "../stores/llm";
 
@@ -23,6 +28,24 @@ const formatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
   timeStyle: "short",
 });
+
+const statusPalette: Record<
+  ResultStatus,
+  { label: string; colorClass: string }
+> = {
+  correct: { label: "Correct", colorClass: "bg-green-500" },
+  incorrect: { label: "Incorrect", colorClass: "bg-destructive" },
+  pending: { label: "Pending", colorClass: "bg-amber-400" },
+};
+
+const typeLabels: Record<string, string> = {
+  single: "Single choice",
+  multi: "Multiple choice",
+  fitb: "Fill in the blank",
+  numeric: "Numeric",
+  ordering: "Ordering",
+  subjective: "Subjective",
+};
 
 const {
   inputs: llmFeedbackInputs,
@@ -56,6 +79,29 @@ let summary: SubmissionSummary | null = null;
 let activeIndex = 0;
 let currentResult: QuestionResult | null = null;
 let promptCopyTimeout: number | null = null;
+let showDiffHighlight = true;
+let showFeedbackDetails = false;
+let scoreMixSegments: { label: string; value: number; colorClass: string }[] =
+  [];
+let tagBreakdownRows: BreakdownRow[] = [];
+let typeBreakdownRows: BreakdownRow[] = [];
+let answerDiffTokens: DiffToken[] = [];
+let diffSummary: Record<DiffToken["type"], number> = {
+  add: 0,
+  remove: 0,
+  match: 0,
+};
+
+type BreakdownRow = {
+  label: string;
+  segments: { label: string; value: number; colorClass: string }[];
+  total: number;
+};
+
+type DiffToken = {
+  text: string;
+  type: "match" | "add" | "remove";
+};
 
 $: summary = $attempts.get(attemptId) ?? null;
 $: if (!summary) {
@@ -76,6 +122,56 @@ $: if (currentResult?.requiresManualGrading) {
     maxScore: currentResult.max,
   });
 }
+
+$: scoreMixSegments = summary
+  ? [
+      {
+        label: "Deterministic earned",
+        value: summary.deterministicEarned,
+        colorClass: statusPalette.correct.colorClass,
+      },
+      {
+        label: "Deterministic remaining",
+        value: Math.max(
+          summary.deterministicMax - summary.deterministicEarned,
+          0,
+        ),
+        colorClass: "bg-muted-foreground/40",
+      },
+      {
+        label: "Subjective pending",
+        value: summary.subjectiveMax,
+        colorClass: statusPalette.pending.colorClass,
+      },
+    ]
+  : [];
+
+$: tagBreakdownRows = summary
+  ? createBreakdownRows(summary.results, (result) =>
+      result.question.tags && result.question.tags.length > 0
+        ? result.question.tags.join(", ")
+        : "Untagged",
+    )
+  : [];
+
+$: typeBreakdownRows = summary
+  ? createBreakdownRows(
+      summary.results,
+      (result) => typeLabels[result.question.type] ?? result.question.type,
+    )
+  : [];
+
+$: answerDiffTokens = currentResult
+  ? buildDiffTokens(currentResult.userAnswer, currentResult.correctAnswer)
+  : [];
+
+$: diffSummary = answerDiffTokens.reduce(
+  (acc, token) => {
+    acc[token.type] = (acc[token.type] ?? 0) + 1;
+    return acc;
+  },
+  { match: 0, add: 0, remove: 0 } as Record<DiffToken["type"], number>,
+);
 
 onDestroy(() => {
   if (promptCopyTimeout) {
@@ -122,6 +218,104 @@ function statusMeta(result: QuestionResult) {
     label: "Pending review",
     textClass: "text-muted-foreground",
   };
+}
+
+function buildStatusSegments(counts: Record<ResultStatus, number>) {
+  return (Object.keys(statusPalette) as ResultStatus[]).map((status) => ({
+    label: statusPalette[status].label,
+    value: counts[status] ?? 0,
+    colorClass: statusPalette[status].colorClass,
+  }));
+}
+
+function createBreakdownRows(
+  results: QuestionResult[],
+  labelForResult: (result: QuestionResult) => string,
+): BreakdownRow[] {
+  const tally = new Map<string, Record<ResultStatus, number>>();
+
+  for (const result of results) {
+    const label = labelForResult(result) || "Unlabeled";
+    const counts = tally.get(label) ?? { correct: 0, incorrect: 0, pending: 0 };
+    counts[result.status] = (counts[result.status] ?? 0) + 1;
+    tally.set(label, counts);
+  }
+
+  return Array.from(tally.entries())
+    .map(([label, counts]) => ({
+      label,
+      segments: buildStatusSegments(counts),
+      total:
+        (counts.correct ?? 0) + (counts.incorrect ?? 0) + (counts.pending ?? 0),
+    }))
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
+}
+
+function tokenizeAnswer(text: string): string[] {
+  return text.trim().length === 0 ? [] : text.trim().split(/\s+/);
+}
+
+function buildDiffTokens(userText: string, referenceText: string): DiffToken[] {
+  const userTokens = tokenizeAnswer(userText);
+  const referenceTokens = tokenizeAnswer(referenceText);
+
+  const rows = userTokens.length;
+  const cols = referenceTokens.length;
+  const dp: number[][] = Array.from({ length: rows + 1 }, () =>
+    Array.from({ length: cols + 1 }, () => 0),
+  );
+
+  for (let i = rows - 1; i >= 0; i -= 1) {
+    for (let j = cols - 1; j >= 0; j -= 1) {
+      if (userTokens[i] === referenceTokens[j]) {
+        dp[i][j] = dp[i + 1][j + 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+  }
+
+  const tokens: DiffToken[] = [];
+  let i = 0;
+  let j = 0;
+
+  while (i < rows && j < cols) {
+    if (userTokens[i] === referenceTokens[j]) {
+      tokens.push({ text: userTokens[i], type: "match" });
+      i += 1;
+      j += 1;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      tokens.push({ text: userTokens[i], type: "remove" });
+      i += 1;
+    } else {
+      tokens.push({ text: referenceTokens[j], type: "add" });
+      j += 1;
+    }
+  }
+
+  while (i < rows) {
+    tokens.push({ text: userTokens[i], type: "remove" });
+    i += 1;
+  }
+
+  while (j < cols) {
+    tokens.push({ text: referenceTokens[j], type: "add" });
+    j += 1;
+  }
+
+  return tokens;
+}
+
+function diffClass(token: DiffToken, perspective: "user" | "reference") {
+  if (token.type === "match") return "text-foreground";
+  if (perspective === "user") {
+    return token.type === "remove"
+      ? "bg-amber-200/80 text-foreground dark:bg-amber-900/60"
+      : "text-muted-foreground opacity-75";
+  }
+  return token.type === "add"
+    ? "bg-primary/20 text-foreground"
+    : "text-muted-foreground line-through";
 }
 
 async function copySubjectivePrompt(result: QuestionResult) {
@@ -249,6 +443,67 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
         </div>
       </div>
     </header>
+
+    <section class="mx-auto w-full max-w-6xl space-y-4 px-4 py-6">
+      <div class="grid gap-4 lg:grid-cols-3">
+        <div class="rounded-lg border bg-card/70 p-4 shadow-sm">
+          <p class="text-xs uppercase text-muted-foreground">Score mix</p>
+          <p class="text-sm text-muted-foreground">
+            Balance between deterministic scoring and subjective reviews.
+          </p>
+          <div class="mt-3">
+            <StackedBar
+              label="Deterministic vs. subjective"
+              description="Earned, remaining, and pending points"
+              segments={scoreMixSegments}
+              total={summary.deterministicMax + summary.subjectiveMax}
+            />
+          </div>
+        </div>
+        <div class="rounded-lg border bg-card/70 p-4 shadow-sm">
+          <p class="text-xs uppercase text-muted-foreground">Tag coverage</p>
+          <p class="text-sm text-muted-foreground">
+            Which tags saw correct, incorrect, or pending outcomes.
+          </p>
+          {#if tagBreakdownRows.length > 0}
+            <div class="mt-3 space-y-3">
+              {#each tagBreakdownRows as breakdown (breakdown.label)}
+                <StackedBar
+                  label={breakdown.label}
+                  description="Per-tag results"
+                  segments={breakdown.segments}
+                  total={breakdown.total}
+                />
+              {/each}
+            </div>
+          {:else}
+            <p class="mt-3 text-sm text-muted-foreground">
+              No tags were attached to this assessment.
+            </p>
+          {/if}
+        </div>
+        <div class="rounded-lg border bg-card/70 p-4 shadow-sm">
+          <p class="text-xs uppercase text-muted-foreground">Question types</p>
+          <p class="text-sm text-muted-foreground">
+            How each format performed across the attempt.
+          </p>
+          {#if typeBreakdownRows.length > 0}
+            <div class="mt-3 space-y-3">
+              {#each typeBreakdownRows as breakdown (breakdown.label)}
+                <StackedBar
+                  label={breakdown.label}
+                  description="Per-type results"
+                  segments={breakdown.segments}
+                  total={breakdown.total}
+                />
+              {/each}
+            </div>
+          {:else}
+            <p class="mt-3 text-sm text-muted-foreground">No question types to summarize.</p>
+          {/if}
+        </div>
+      </div>
+    </section>
 
     <main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 lg:flex-row">
       <aside class="lg:w-72">
@@ -378,14 +633,93 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
                 </div>
               {/if}
 
-              {#if currentResult.feedback}
-                <div class="rounded-md border bg-muted/10 p-4 text-sm">
-                  <p class={`font-semibold ${meta.textClass}`}>Feedback</p>
-                  <div class="mt-2 text-muted-foreground">
-                    {@html renderWithKatex(currentResult.feedback)}
+              <div class="space-y-3 rounded-md border bg-muted/10 p-4 text-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p class="text-xs uppercase text-muted-foreground">Answer comparison</p>
+                    <p class="text-muted-foreground">
+                      Contrast your wording with the expected answer and call out gaps.
+                    </p>
+                  </div>
+                  <label class="flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-wide text-foreground">
+                    <input
+                      type="checkbox"
+                      class="h-3 w-3 rounded border border-input accent-primary"
+                      bind:checked={showDiffHighlight}
+                    />
+                    Highlight differences
+                  </label>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                  <div class="space-y-2 rounded-md border bg-background/80 p-3 leading-relaxed">
+                    <p class="text-xs uppercase text-muted-foreground">Your wording</p>
+                    {#if showDiffHighlight}
+                      {#if answerDiffTokens.length === 0}
+                        <p class="text-muted-foreground">No answer provided.</p>
+                      {:else}
+                        <div class="flex flex-wrap gap-1 text-sm">
+                          {#each answerDiffTokens as token, tokenIndex}
+                            <span class={`rounded px-1 ${diffClass(token, "user")}`}>
+                              {token.text}
+                            </span>
+                            {#if tokenIndex < answerDiffTokens.length - 1}
+                              {" "}
+                            {/if}
+                          {/each}
+                        </div>
+                      {/if}
+                    {:else}
+                      <div class="text-sm text-foreground">
+                        {@html renderWithKatex(currentResult.userAnswer || "—")}
+                      </div>
+                    {/if}
+                  </div>
+                  <div class="space-y-2 rounded-md border bg-background/80 p-3 leading-relaxed">
+                    <p class="text-xs uppercase text-muted-foreground">Reference wording</p>
+                    {#if showDiffHighlight}
+                      {#if answerDiffTokens.length === 0}
+                        <p class="text-muted-foreground">No comparison available.</p>
+                      {:else}
+                        <div class="flex flex-wrap gap-1 text-sm">
+                          {#each answerDiffTokens as token, tokenIndex}
+                            <span class={`rounded px-1 ${diffClass(token, "reference")}`}>
+                              {token.text}
+                            </span>
+                            {#if tokenIndex < answerDiffTokens.length - 1}
+                              {" "}
+                            {/if}
+                          {/each}
+                        </div>
+                      {/if}
+                    {:else}
+                      <div class="text-sm text-foreground">
+                        {@html renderWithKatex(currentResult.correctAnswer || "—")}
+                      </div>
+                    {/if}
                   </div>
                 </div>
-              {/if}
+                <div class="flex flex-wrap gap-3 text-[0.75rem] text-muted-foreground">
+                  <span class="rounded-full bg-muted/70 px-2 py-1 font-medium text-foreground">
+                    Matches: {diffSummary.match}
+                  </span>
+                  <span class="rounded-full bg-muted/70 px-2 py-1 font-medium text-foreground">
+                    Missing: {diffSummary.add}
+                  </span>
+                  <span class="rounded-full bg-muted/70 px-2 py-1 font-medium text-foreground">
+                    Extra: {diffSummary.remove}
+                  </span>
+                </div>
+                <details class="rounded-md border bg-card/60 p-3" bind:open={showFeedbackDetails}>
+                  <summary class="cursor-pointer text-xs font-semibold uppercase tracking-wide text-foreground">
+                    Reference explanation
+                  </summary>
+                  <div class="mt-2 text-muted-foreground">
+                    {@html renderWithKatex(
+                      currentResult.feedback ?? "No explanation was provided for this question.",
+                    )}
+                  </div>
+                </details>
+              </div>
 
               {#if currentResult.requiresManualGrading}
                 {@const questionId = currentResult.question.id}
