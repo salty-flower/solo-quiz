@@ -34,9 +34,9 @@ export interface DeterministicQuestionResult extends BaseQuestionResult {
 export interface SubjectiveQuestionResult extends BaseQuestionResult {
   question: SubjectiveQuestion;
   requiresManualGrading: true;
-  earned: null;
-  isCorrect: null;
-  status: "pending";
+  earned: number | null;
+  isCorrect: boolean | null;
+  status: ResultStatus;
   rubrics: SubjectiveQuestion["rubrics"];
 }
 
@@ -297,7 +297,7 @@ export function createSerializableQuestionResult(
     weight: questionWeight(result.question),
     tags: result.question.tags ?? [],
     status: result.status,
-    earned: result.requiresManualGrading ? null : result.earned,
+    earned: result.earned,
     max: result.max,
     userAnswer: result.userAnswer,
     correctAnswer: result.correctAnswer,

@@ -17,6 +17,7 @@ import type {
   ResultStatus,
   SubmissionSummary,
 } from "../results";
+import type { LlmFeedback } from "../schema";
 import { attempts } from "../stores/attempts";
 import { llm } from "../stores/llm";
 
@@ -75,6 +76,7 @@ const {
   toggleWorkspaceVisibility,
 } = llm;
 
+let baseSummary: SubmissionSummary | null = null;
 let summary: SubmissionSummary | null = null;
 let activeIndex = 0;
 let currentResult: QuestionResult | null = null;
@@ -83,6 +85,10 @@ let showDiffHighlight = true;
 let showFeedbackDetails = false;
 let scoreMixSegments: { label: string; value: number; colorClass: string }[] =
   [];
+let subjectivePendingPoints = 0;
+let subjectiveEarnedPoints = 0;
+let subjectiveMissedPoints = 0;
+let totalSubjectiveMax = 0;
 let tagBreakdownRows: BreakdownRow[] = [];
 let typeBreakdownRows: BreakdownRow[] = [];
 let answerDiffTokens: DiffToken[] = [];
@@ -103,7 +109,31 @@ type DiffToken = {
   type: "match" | "add" | "remove";
 };
 
-$: summary = $attempts.get(attemptId) ?? null;
+$: baseSummary = $attempts.get(attemptId) ?? null;
+$: summary = baseSummary
+  ? applyFeedbackToSummary(baseSummary, $llmFeedbackResults)
+  : null;
+$: totalSubjectiveMax = baseSummary?.subjectiveMax ?? 0;
+$: subjectivePendingPoints = summary
+  ? summary.results
+      .filter(
+        (result) => result.requiresManualGrading && result.status === "pending",
+      )
+      .reduce((sum, result) => sum + result.max, 0)
+  : 0;
+$: subjectiveEarnedPoints = summary
+  ? summary.results
+      .filter(
+        (result) => result.requiresManualGrading && result.status !== "pending",
+      )
+      .reduce((sum, result) => sum + (result.earned ?? 0), 0)
+  : 0;
+$: subjectiveMissedPoints = summary
+  ? Math.max(
+      totalSubjectiveMax - subjectivePendingPoints - subjectiveEarnedPoints,
+      0,
+    )
+  : 0;
 $: if (!summary) {
   activeIndex = 0;
 } else if (
@@ -139,9 +169,19 @@ $: scoreMixSegments = summary
         colorClass: "bg-muted-foreground/40",
       },
       {
+        label: "Subjective earned",
+        value: subjectiveEarnedPoints,
+        colorClass: "bg-primary",
+      },
+      {
         label: "Subjective pending",
-        value: summary.subjectiveMax,
+        value: subjectivePendingPoints,
         colorClass: statusPalette.pending.colorClass,
+      },
+      {
+        label: "Subjective missed",
+        value: subjectiveMissedPoints,
+        colorClass: statusPalette.incorrect.colorClass,
       },
     ]
   : [];
@@ -199,6 +239,41 @@ function formatTime(sec: number): string {
     .toString()
     .padStart(2, "0");
   return `${minutes}:${seconds}`;
+}
+
+function applyFeedbackToResult(
+  result: QuestionResult,
+  feedback: LlmFeedback | undefined,
+): QuestionResult {
+  if (!feedback || !result.requiresManualGrading) return result;
+
+  const isCorrect =
+    feedback.verdict === "correct" || feedback.score >= result.max;
+  const status: ResultStatus = isCorrect ? "correct" : "incorrect";
+
+  return {
+    ...result,
+    status,
+    earned: feedback.score,
+    isCorrect,
+    feedback: feedback.feedback ?? result.feedback,
+    max: Math.max(result.max, feedback.maxScore),
+  };
+}
+
+function applyFeedbackToSummary(
+  attemptSummary: SubmissionSummary,
+  feedbackResults: Record<string, LlmFeedback | undefined>,
+): SubmissionSummary {
+  const results = attemptSummary.results.map((result) =>
+    applyFeedbackToResult(result, feedbackResults[result.question.id]),
+  );
+
+  const pendingSubjectiveCount = results.filter(
+    (result) => result.requiresManualGrading && result.status === "pending",
+  ).length;
+
+  return { ...attemptSummary, results, pendingSubjectiveCount };
 }
 
 function statusMeta(result: QuestionResult) {
@@ -417,12 +492,21 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
           </div>
           <div class="rounded-lg border bg-card/80 p-4">
             <p class="text-xs uppercase text-muted-foreground">Subjective review</p>
-            {#if summary.subjectiveMax > 0}
-              <p class="text-2xl font-semibold">{summary.subjectiveMax}</p>
+            {#if totalSubjectiveMax > 0}
+              <p class="text-2xl font-semibold">{subjectivePendingPoints}</p>
               <p class="text-sm text-muted-foreground">
                 Pending across {summary.pendingSubjectiveCount}
                 {summary.pendingSubjectiveCount === 1 ? "question" : "questions"}
               </p>
+              {#if summary.pendingSubjectiveCount === 0}
+                <p class="text-xs text-green-600 dark:text-green-300">
+                  All subjective questions have been reviewed.
+                </p>
+              {:else if subjectivePendingPoints < totalSubjectiveMax}
+                <p class="text-xs text-muted-foreground">
+                  {totalSubjectiveMax - subjectivePendingPoints} points already graded.
+                </p>
+              {/if}
             {:else}
               <p class="text-lg font-semibold">None required</p>
               <p class="text-sm text-muted-foreground">This attempt has no subjective scoring.</p>
@@ -456,7 +540,7 @@ function loadWorkspaceFromApplied(questionId: string, maxScore: number) {
               label="Deterministic vs. subjective"
               description="Earned, remaining, and pending points"
               segments={scoreMixSegments}
-              total={summary.deterministicMax + summary.subjectiveMax}
+              total={summary.deterministicMax + totalSubjectiveMax}
             />
           </div>
         </div>
