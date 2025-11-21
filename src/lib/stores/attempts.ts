@@ -1,5 +1,12 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { derived, get, writable } from "svelte/store";
+import { reportStorageIssue } from "../storage-notices";
+import {
+  isIndexedDbAvailable,
+  safeLocalStorageGet,
+  safeLocalStorageRemove,
+  safeLocalStorageSet,
+} from "../utils/persistence";
 import type { SubmissionSummary } from "../results";
 
 const MAX_ATTEMPTS = 10;
@@ -11,14 +18,6 @@ type StoredSubmissionSummary = Omit<
   SubmissionSummary,
   "startedAt" | "completedAt"
 > & { startedAt: number; completedAt: number };
-
-function isIndexedDbAvailable(): boolean {
-  try {
-    return typeof indexedDB !== "undefined";
-  } catch {
-    return false;
-  }
-}
 
 interface AttemptsDB extends DBSchema {
   [STORE_ATTEMPTS]: {
@@ -82,20 +81,23 @@ function isStoredAttempt(value: unknown): value is StoredSubmissionSummary {
 
 function readLocalAttempts(): StoredSubmissionSummary[] {
   if (typeof localStorage === "undefined") return [...memoryAttempts];
-  const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+  const stored = safeLocalStorageGet(LOCAL_STORAGE_KEY);
   if (!stored) return [...memoryAttempts];
 
   try {
     const parsed = JSON.parse(stored);
     if (!Array.isArray(parsed)) {
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      safeLocalStorageRemove(LOCAL_STORAGE_KEY);
       return [...memoryAttempts];
     }
     const filtered = parsed.filter(isStoredAttempt);
     return filtered;
   } catch (error) {
     console.warn("Unable to parse local attempts cache; clearing", error);
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    reportStorageIssue(
+      "We could not load your previous attempts from storage.",
+    );
+    safeLocalStorageRemove(LOCAL_STORAGE_KEY);
     return [...memoryAttempts];
   }
 }
@@ -107,12 +109,13 @@ function persistSnapshot(entries: StoredSubmissionSummary[]): void {
   if (typeof localStorage === "undefined") return;
   try {
     if (entries.length === 0) {
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      safeLocalStorageRemove(LOCAL_STORAGE_KEY);
       return;
     }
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(entries));
+    safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(entries));
   } catch (error) {
     console.warn("Unable to persist attempts to localStorage", error);
+    reportStorageIssue("We could not save your attempts locally.");
   }
 }
 

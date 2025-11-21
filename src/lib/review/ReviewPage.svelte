@@ -11,6 +11,7 @@ import type { LlmFeedback } from "../schema";
 import { attempts } from "../stores/attempts";
 import { llm } from "../stores/llm";
 import { getReviewPath, navigate } from "../stores/router";
+import { formatCountdown } from "../utils/time";
 import BreakdownCharts from "./BreakdownCharts.svelte";
 import ComparisonSection from "./ComparisonSection.svelte";
 import { createBreakdownRows, type BreakdownRow } from "./breakdown";
@@ -30,6 +31,7 @@ const formatter = new Intl.DateTimeFormat(undefined, {
 });
 
 const searchInputId = "review-search-filter";
+const formatTime = formatCountdown;
 
 const typeLabels: Record<string, string> = {
   single: "Single choice",
@@ -309,16 +311,6 @@ function moveSelection(delta: number) {
 function openComparisonReview(id: string | null) {
   if (!id) return;
   navigate(getReviewPath(id));
-}
-
-function formatTime(sec: number): string {
-  const minutes = Math.floor(sec / 60)
-    .toString()
-    .padStart(2, "0");
-  const seconds = Math.floor(sec % 60)
-    .toString()
-    .padStart(2, "0");
-  return `${minutes}:${seconds}`;
 }
 
 function applyFeedbackToResult(

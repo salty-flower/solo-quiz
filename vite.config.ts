@@ -60,4 +60,8 @@ export default defineConfig({
       input: path.resolve(process.cwd(), inputHtml),
     },
   },
+  test: {
+    environment: "jsdom",
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+  },
 });

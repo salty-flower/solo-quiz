@@ -81,12 +81,9 @@ export function evaluateQuestion(
   value: AnswerValue,
 ): QuestionResult {
   const max = questionWeight(question);
-  let userAnswer = "";
-  let correctAnswer = "";
 
   if (question.type === "subjective") {
     const subjective = question as SubjectiveQuestion;
-    userAnswer = typeof value === "string" ? value : "";
     return {
       question: subjective,
       requiresManualGrading: true,
@@ -94,114 +91,161 @@ export function evaluateQuestion(
       isCorrect: null,
       status: "pending",
       max,
-      userAnswer,
+      userAnswer: typeof value === "string" ? value : "",
       correctAnswer: "",
       feedback: subjective.feedback?.incorrect ?? subjective.feedback?.correct,
       rubrics: subjective.rubrics,
     };
   }
 
-  let isCorrect = false;
-  let earned = 0;
-  let selectedOptions: string[] | undefined;
-
-  switch (question.type) {
-    case "single": {
-      const single = question as SingleQuestion;
-      const selected = typeof value === "string" ? value : "";
-      selectedOptions = selected ? [selected] : [];
-      userAnswer = renderOptionLabels(single, selected ? [selected] : []);
-      correctAnswer = renderOptionLabels(single, [single.correct]);
-      isCorrect = selected === single.correct;
-      break;
-    }
-    case "multi": {
-      const multi = question as MultiQuestion;
-      const selected = Array.isArray(value) ? (value as string[]) : [];
-      selectedOptions = [...selected];
-      userAnswer = renderOptionLabels(multi, selected);
-      correctAnswer = renderOptionLabels(multi, multi.correct);
-      const normalizedSelected = [...selected].sort();
-      const normalizedCorrect = [...multi.correct].sort();
-      isCorrect = arraysEqual(normalizedSelected, normalizedCorrect);
-      break;
-    }
-    case "fitb": {
-      const fitb = question as FitbQuestion;
-      const text = typeof value === "string" ? value : "";
-      userAnswer = text;
-      const normalized = normalizeFitbAnswer(fitb, text);
-      isCorrect = fitb.accept.some((entry) => {
-        if (typeof entry === "string") {
-          return normalizeFitbAnswer(fitb, entry) === normalized;
-        }
-        try {
-          const regex = new RegExp(entry.pattern, entry.flags);
-          return regex.test(text);
-        } catch (error) {
-          console.warn("Invalid FITB regex", error);
-          return false;
-        }
-      });
-      correctAnswer = fitb.accept
-        .map((entry) =>
-          typeof entry === "string"
-            ? entry
-            : `/${entry.pattern}/${entry.flags ?? ""}`,
-        )
-        .join(", ");
-      break;
-    }
-    case "numeric": {
-      const numeric = question as NumericQuestion;
-      const text = typeof value === "string" ? value.trim() : "";
-      userAnswer = text;
-      const parsed = Number.parseFloat(text);
-      if (!Number.isNaN(parsed)) {
-        const tolerance = numeric.tolerance ?? 0;
-        isCorrect = Math.abs(parsed - numeric.correct) <= tolerance;
-      } else {
-        isCorrect = false;
-      }
-      correctAnswer = numeric.tolerance
-        ? `${numeric.correct} ± ${numeric.tolerance}`
-        : numeric.correct.toString();
-      break;
-    }
-    case "ordering": {
-      const ordering = question as OrderingQuestion;
-      const sequence = Array.isArray(value)
-        ? (value as string[])
-        : ordering.items;
-      userAnswer = sequence.join(" → ");
-      correctAnswer = ordering.correctOrder.join(" → ");
-      isCorrect = arraysEqual(sequence, ordering.correctOrder);
-      break;
-    }
-    default: {
-      isCorrect = false;
-    }
-  }
-
-  if (isCorrect) {
-    earned = max;
-  }
-
-  const feedback = isCorrect
+  const evaluation = evaluateDeterministicQuestion(question, value);
+  const feedback = evaluation.isCorrect
     ? question.feedback?.correct
     : question.feedback?.incorrect;
 
   return {
     question,
     requiresManualGrading: false,
-    earned,
+    earned: evaluation.isCorrect ? max : 0,
     max,
-    isCorrect,
-    status: isCorrect ? "correct" : "incorrect",
-    userAnswer,
-    correctAnswer,
+    isCorrect: evaluation.isCorrect,
+    status: evaluation.isCorrect ? "correct" : "incorrect",
+    userAnswer: evaluation.userAnswer,
+    correctAnswer: evaluation.correctAnswer,
     feedback,
+    selectedOptions: evaluation.selectedOptions,
+  };
+}
+
+type DeterministicQuestion =
+  | SingleQuestion
+  | MultiQuestion
+  | FitbQuestion
+  | NumericQuestion
+  | OrderingQuestion;
+
+interface DeterministicEvaluation {
+  userAnswer: string;
+  correctAnswer: string;
+  isCorrect: boolean;
+  selectedOptions?: string[];
+}
+
+function evaluateDeterministicQuestion(
+  question: DeterministicQuestion,
+  value: AnswerValue,
+): DeterministicEvaluation {
+  switch (question.type) {
+    case "single":
+      return evaluateSingleChoice(question, value);
+    case "multi":
+      return evaluateMultiChoice(question, value);
+    case "fitb":
+      return evaluateFitbQuestion(question, value);
+    case "numeric":
+      return evaluateNumericQuestion(question, value);
+    case "ordering":
+      return evaluateOrderingQuestion(question, value);
+    default: {
+      const exhaustive: never = question;
+      return {
+        userAnswer: "",
+        correctAnswer: "",
+        isCorrect: false,
+      } satisfies DeterministicEvaluation;
+    }
+  }
+}
+
+function evaluateSingleChoice(
+  question: SingleQuestion,
+  value: AnswerValue,
+): DeterministicEvaluation {
+  const selected = typeof value === "string" ? value : "";
+  const selectedOptions = selected ? [selected] : [];
+  return {
+    userAnswer: renderOptionLabels(question, selectedOptions),
+    correctAnswer: renderOptionLabels(question, [question.correct]),
+    isCorrect: selected === question.correct,
     selectedOptions,
+  };
+}
+
+function evaluateMultiChoice(
+  question: MultiQuestion,
+  value: AnswerValue,
+): DeterministicEvaluation {
+  const selected = Array.isArray(value) ? (value as string[]) : [];
+  const normalizedSelected = [...selected].sort();
+  const normalizedCorrect = [...question.correct].sort();
+  return {
+    userAnswer: renderOptionLabels(question, selected),
+    correctAnswer: renderOptionLabels(question, question.correct),
+    isCorrect: arraysEqual(normalizedSelected, normalizedCorrect),
+    selectedOptions: [...selected],
+  };
+}
+
+function evaluateFitbQuestion(
+  question: FitbQuestion,
+  value: AnswerValue,
+): DeterministicEvaluation {
+  const text = typeof value === "string" ? value : "";
+  const normalized = normalizeFitbAnswer(question, text);
+  const isCorrect = question.accept.some((entry) => {
+    if (typeof entry === "string") {
+      return normalizeFitbAnswer(question, entry) === normalized;
+    }
+    try {
+      const regex = new RegExp(entry.pattern, entry.flags);
+      return regex.test(normalized);
+    } catch (error) {
+      console.warn("Invalid FITB regex", error);
+      return false;
+    }
+  });
+
+  const correctAnswer = question.accept
+    .map((entry) =>
+      typeof entry === "string"
+        ? entry
+        : `/${entry.pattern}/${entry.flags ?? ""}`,
+    )
+    .join(", ");
+
+  return { userAnswer: normalized, correctAnswer, isCorrect };
+}
+
+function evaluateNumericQuestion(
+  question: NumericQuestion,
+  value: AnswerValue,
+): DeterministicEvaluation {
+  const text = typeof value === "string" ? value.trim() : "";
+  const parsed = Number.parseFloat(text);
+  const tolerance = question.tolerance ?? 0;
+  const withinTolerance = !Number.isNaN(parsed)
+    ? Math.abs(parsed - question.correct) <= tolerance
+    : false;
+
+  return {
+    userAnswer: text,
+    correctAnswer: tolerance
+      ? `${question.correct} ± ${tolerance}`
+      : question.correct.toString(),
+    isCorrect: withinTolerance,
+  };
+}
+
+function evaluateOrderingQuestion(
+  question: OrderingQuestion,
+  value: AnswerValue,
+): DeterministicEvaluation {
+  const sequence = Array.isArray(value) ? (value as string[]) : question.items;
+
+  return {
+    userAnswer: sequence.join(" → "),
+    correctAnswer: question.correctOrder.join(" → "),
+    isCorrect: arraysEqual(sequence, question.correctOrder),
   };
 }
 

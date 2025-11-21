@@ -1,4 +1,11 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { reportStorageIssue } from "./storage-notices";
+import {
+  isIndexedDbAvailable,
+  safeLocalStorageGet,
+  safeLocalStorageRemove,
+  safeLocalStorageSet,
+} from "./utils/persistence";
 
 const DB_NAME = "solo-quiz";
 const STORE_RECENTS = "recent-files";
@@ -30,14 +37,6 @@ interface SoloQuizDB extends DBSchema {
 
 let dbPromise: Promise<IDBPDatabase<SoloQuizDB> | null> | null = null;
 const memoryRecents: RecentFileEntry[] = [];
-
-function isIndexedDbAvailable(): boolean {
-  try {
-    return typeof indexedDB !== "undefined";
-  } catch {
-    return false;
-  }
-}
 
 async function getDb(): Promise<IDBPDatabase<SoloQuizDB> | null> {
   if (!isIndexedDbAvailable()) {
@@ -92,7 +91,7 @@ interface LocalRecentPayload {
 function clearLocalRecents() {
   if (typeof localStorage === "undefined") return;
   try {
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    safeLocalStorageRemove(LOCAL_STORAGE_KEY);
   } catch (error) {
     console.warn("Unable to clear local recent files", error);
   }
@@ -100,7 +99,7 @@ function clearLocalRecents() {
 
 function readLocalRecents(): RecentFileEntry[] {
   if (typeof localStorage === "undefined") return [...memoryRecents];
-  const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+  const stored = safeLocalStorageGet(LOCAL_STORAGE_KEY);
   if (!stored) return [...memoryRecents];
 
   try {
@@ -122,7 +121,7 @@ function readLocalRecents(): RecentFileEntry[] {
     const cleaned = items.filter(isRecentEntry);
     if (cleaned.length !== items.length) {
       clearLocalRecents();
-      localStorage.setItem(
+      safeLocalStorageSet(
         LOCAL_STORAGE_KEY,
         JSON.stringify({ version: LOCAL_STORAGE_VERSION, items: cleaned }),
       );
@@ -130,6 +129,7 @@ function readLocalRecents(): RecentFileEntry[] {
     return cleaned;
   } catch (error) {
     console.warn("Unable to parse local recent files; clearing cache", error);
+    reportStorageIssue("We could not read your recent files from storage.");
     clearLocalRecents();
     return [...memoryRecents];
   }
@@ -142,12 +142,15 @@ function writeLocalRecents(entries: RecentFileEntry[]): void {
       clearLocalRecents();
       return;
     }
-    localStorage.setItem(
+    safeLocalStorageSet(
       LOCAL_STORAGE_KEY,
       JSON.stringify({ version: LOCAL_STORAGE_VERSION, items: entries }),
     );
   } catch (error) {
     console.warn("Unable to persist recents to localStorage", error);
+    reportStorageIssue(
+      "We could not save your recent files; caching is disabled.",
+    );
   }
 }
 
