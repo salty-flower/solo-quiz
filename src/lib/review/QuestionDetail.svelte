@@ -12,8 +12,6 @@ import type {
   ResultStatus,
   SubjectiveQuestionResult,
 } from "../results";
-import type { LlmFeedback } from "../schema";
-import type { GradingWorkspace } from "../stores/llm";
 import AnswerDiff from "./AnswerDiff.svelte";
 import { statusMeta } from "./status";
 import LlmWorkspaceSection from "./LlmWorkspaceSection.svelte";
@@ -28,73 +26,10 @@ export let showFeedbackDetails: boolean;
 export let answerDiffTokens: DiffToken[];
 export let diffSummary: Record<DiffToken["type"], number>;
 
-export let llmInputs: Record<string, string>;
-export let llmErrors: Record<string, string | null>;
-export let llmResults: Record<string, LlmFeedback | undefined>;
-export let llmWorkspaces: Record<string, GradingWorkspace | undefined>;
-export let llmWorkspaceErrors: Record<string, string | null>;
-export let llmWorkspaceVisibility: Record<string, boolean | undefined>;
-export let copiedPromptQuestionId: string | null;
-export let promptCopyError: string | null;
-
-export let onCopyPrompt: (result: QuestionResult) => void;
-export let onApplyFeedback: (result: QuestionResult) => void;
-export let onClearFeedback: (questionId: string) => void;
-export let onInsertWorkspaceJson: (questionId: string) => void;
-export let onLoadWorkspaceFromApplied: (
-  questionId: string,
-  maxScore: number,
-) => void;
-export let onToggleWorkspaceVisibility: (questionId: string) => void;
-export let onSetFeedbackInput: (questionId: string, value: string) => void;
-export let onSetWorkspaceVerdict: (
-  questionId: string,
-  verdict: GradingWorkspace["verdict"],
-) => void;
-export let onSetWorkspaceScore: (questionId: string, score: number) => void;
-export let onSetWorkspaceFeedback: (
-  questionId: string,
-  feedback: string,
-) => void;
-export let onSetWorkspaceRubricFraction: (
-  questionId: string,
-  index: number,
-  value: number,
-) => void;
-export let onSetWorkspaceRubricComments: (
-  questionId: string,
-  index: number,
-  value: string,
-) => void;
-export let onAddWorkspaceImprovement: (questionId: string) => void;
-export let onUpdateWorkspaceImprovement: (
-  questionId: string,
-  index: number,
-  value: string,
-) => void;
-export let onRemoveWorkspaceImprovement: (
-  questionId: string,
-  index: number,
-) => void;
-
 let meta: ReturnType<typeof statusMeta>;
-let questionId: string;
-let feedbackInput: string;
-let feedbackError: string | null | undefined;
-let feedback: LlmFeedback | undefined;
-let workspace: GradingWorkspace | undefined;
-let workspaceError: string | null | undefined;
-let isWorkspaceCollapsed: boolean;
 let subjectiveResult: SubjectiveQuestionResult | null;
 
 $: meta = statusMeta(currentResult as { status: ResultStatus });
-$: questionId = currentResult.question.id;
-$: feedbackInput = llmInputs[questionId] ?? "";
-$: feedbackError = llmErrors[questionId];
-$: feedback = llmResults[questionId];
-$: workspace = llmWorkspaces[questionId];
-$: workspaceError = llmWorkspaceErrors[questionId];
-$: isWorkspaceCollapsed = llmWorkspaceVisibility[questionId] ?? false;
 $: subjectiveResult = currentResult.requiresManualGrading
   ? (currentResult as SubjectiveQuestionResult)
   : null;
@@ -210,38 +145,7 @@ $: subjectiveResult = currentResult.requiresManualGrading
     />
 
     {#if subjectiveResult}
-      <LlmWorkspaceSection
-        result={subjectiveResult}
-        feedbackInput={feedbackInput}
-        feedbackError={feedbackError}
-        feedback={feedback}
-        workspace={workspace}
-        workspaceError={workspaceError}
-        isWorkspaceCollapsed={isWorkspaceCollapsed}
-        copiedPromptQuestionId={copiedPromptQuestionId}
-        promptCopyError={promptCopyError}
-        copyPrompt={() => onCopyPrompt(currentResult)}
-        applyFeedback={() => onApplyFeedback(currentResult)}
-        clearFeedback={() => onClearFeedback(questionId)}
-        insertWorkspaceJson={() => onInsertWorkspaceJson(questionId)}
-        loadWorkspaceFromApplied={() => onLoadWorkspaceFromApplied(questionId, currentResult.max)}
-        toggleWorkspaceVisibility={() => onToggleWorkspaceVisibility(questionId)}
-        setFeedbackInput={(value) => onSetFeedbackInput(questionId, value)}
-        setWorkspaceVerdict={(verdict) => onSetWorkspaceVerdict(questionId, verdict)}
-        setWorkspaceScore={(score) => onSetWorkspaceScore(questionId, score)}
-        setWorkspaceFeedback={(feedbackValue) => onSetWorkspaceFeedback(questionId, feedbackValue)}
-        setWorkspaceRubricFraction={(index, value) =>
-          onSetWorkspaceRubricFraction(questionId, index, value)
-        }
-        setWorkspaceRubricComments={(index, value) =>
-          onSetWorkspaceRubricComments(questionId, index, value)
-        }
-        addWorkspaceImprovement={() => onAddWorkspaceImprovement(questionId)}
-        updateWorkspaceImprovement={(index, value) =>
-          onUpdateWorkspaceImprovement(questionId, index, value)
-        }
-        removeWorkspaceImprovement={(index) => onRemoveWorkspaceImprovement(questionId, index)}
-      />
+      <LlmWorkspaceSection result={subjectiveResult} />
     {/if}
   </CardContent>
 </Card>
