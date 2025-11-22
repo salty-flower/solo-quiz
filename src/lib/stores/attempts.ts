@@ -173,6 +173,28 @@ function toLimitedSnapshot(
     .slice(0, MAX_STORED_ATTEMPTS);
 }
 
+async function persistAttemptMap(
+  entries: Map<string, SubmissionSummary>,
+): Promise<void> {
+  const snapshot = toLimitedSnapshot(
+    [...entries.values()].map(serializeAttempt),
+  );
+  const db = await getDb();
+  if (!db) {
+    persistSnapshot(snapshot);
+    return;
+  }
+
+  const tx = db.transaction(attemptsStore, "readwrite");
+  await tx.store.clear();
+  for (const entry of snapshot) {
+    await tx.store.put(entry);
+  }
+  await tx.done;
+  const persisted = await getAttemptsFromDb(db);
+  persistSnapshot(persisted);
+}
+
 async function clearPersistedAttempts() {
   const db = await getDb();
   if (!db) {
@@ -217,4 +239,21 @@ export function getAttempt(attemptId: string): SubmissionSummary | null {
 export async function clearAttempts() {
   attemptMap.set(new Map());
   await clearPersistedAttempts();
+}
+
+export async function deleteAttempt(attemptId: string) {
+  const updated = new Map(get(attemptMap));
+  updated.delete(attemptId);
+  const limited = toLimitedMap([...updated.values()]);
+  attemptMap.set(limited);
+  await persistAttemptMap(limited);
+}
+
+export async function deleteAttemptsByTitle(title: string) {
+  const filtered = [...get(attemptMap).values()].filter(
+    (entry) => entry.assessment.meta.title !== title,
+  );
+  const next = toLimitedMap(filtered);
+  attemptMap.set(next);
+  await persistAttemptMap(next);
 }

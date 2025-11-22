@@ -3,6 +3,7 @@ import { parseAssessment, type Assessment, type Question } from "../schema";
 import {
   clearRecentFiles,
   getRecentFiles,
+  removeRecentFiles,
   touchRecentFile,
   type RecentFileEntry,
 } from "../storage";
@@ -322,6 +323,11 @@ function createQuizStore() {
     await refreshRecentFiles();
   }
 
+  async function deleteRecentHistory(names: string[]) {
+    await removeRecentFiles(names);
+    await refreshRecentFiles();
+  }
+
   function teardown() {
     stopTimer();
   }
@@ -361,6 +367,7 @@ function createQuizStore() {
     retakeIncorrectQuestions,
     resetAssessment,
     clearHistory,
+    deleteRecentHistory,
     teardown,
   };
 }

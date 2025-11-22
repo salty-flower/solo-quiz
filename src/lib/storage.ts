@@ -217,6 +217,28 @@ export async function touchRecentFile(
   persistSnapshot(snapshot);
 }
 
+export async function removeRecentFiles(names: string[]): Promise<void> {
+  const uniqueNames = Array.from(new Set(names));
+  if (uniqueNames.length === 0) return;
+
+  const db = await getDb();
+  if (!db) {
+    const updated = readLocalRecents().filter(
+      (entry) => !uniqueNames.includes(entry.name),
+    );
+    persistSnapshot(updated);
+    return;
+  }
+
+  const tx = db.transaction(recentsStore, "readwrite");
+  for (const name of uniqueNames) {
+    await tx.store.delete(name);
+  }
+  await tx.done;
+  const snapshot = await getRecentFilesFromDb(db);
+  persistSnapshot(snapshot);
+}
+
 export async function clearRecentFiles(): Promise<void> {
   const db = await getDb();
   if (!db) {
