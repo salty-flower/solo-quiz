@@ -13,7 +13,7 @@ import AppSidebar from "./lib/components/app/AppSidebar.svelte";
 import QuestionCard from "./lib/components/app/QuestionCard.svelte";
 import QuizNavigation from "./lib/components/app/QuizNavigation.svelte";
 import SubmissionSummaryBanner from "./lib/components/app/SubmissionSummaryBanner.svelte";
-import { parseAssessment, type Assessment, type Question } from "./lib/schema";
+import { type Assessment, type Question } from "./lib/schema";
 import {
   findExampleAssessment,
   getExampleAssessments,
