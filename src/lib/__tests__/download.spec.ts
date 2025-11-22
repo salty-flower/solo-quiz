@@ -12,7 +12,9 @@ beforeEach(() => {
 
 describe("triggerDownload", () => {
   it("creates an anchor and revokes the blob", () => {
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click");
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
     const appendSpy = vi.spyOn(document.body, "append");
 
     triggerDownload("file.txt", "content", "text/plain");
@@ -27,4 +29,5 @@ describe("triggerDownload", () => {
 afterEach(() => {
   URL.createObjectURL = originalCreateObjectUrl;
   URL.revokeObjectURL = originalRevoke;
+  vi.restoreAllMocks();
 });
