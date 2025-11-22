@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+const contextSchema = z.object({
+  id: z.string().min(1, "Context id is required"),
+  title: z.string().optional(),
+  body: z.string().min(1, "Context body is required"),
+});
+
 const optionSchema = z.object({
   id: z.string().min(1, "Option id is required"),
   label: z.string().min(1, "Option label is required"),
@@ -24,6 +30,7 @@ const baseQuestion = z.object({
   weight: z.number().min(0).optional(),
   tags: z.array(z.string().min(1)).optional(),
   feedback: feedbackSchema,
+  contextId: z.string().min(1, "Context id is required").optional(),
 });
 
 type Option = z.infer<typeof optionSchema>;
@@ -88,6 +95,7 @@ export const questionSchema = z.discriminatedUnion("type", [
 ]);
 
 export type Question = z.infer<typeof questionSchema>;
+export type AssessmentContext = z.infer<typeof contextSchema>;
 
 export type SingleQuestion = z.infer<typeof singleQuestion>;
 export type MultiQuestion = z.infer<typeof multiQuestion>;
@@ -104,11 +112,48 @@ const metaSchema = z.object({
   timeLimitSec: z.number().int().positive().optional(),
 });
 
-export const assessmentSchema = z.object({
-  schemaVersion: z.string().regex(/^1\./, "schemaVersion must start with 1."),
-  meta: metaSchema,
-  questions: z.array(questionSchema),
-});
+export const assessmentSchema = z
+  .object({
+    schemaVersion: z.string().regex(/^1\./, "schemaVersion must start with 1."),
+    meta: metaSchema,
+    questions: z.array(questionSchema),
+    contexts: z.array(contextSchema).nonempty().optional(),
+  })
+  .superRefine((assessment, ctx) => {
+    if (assessment.contexts) {
+      const ids = new Set<string>();
+      assessment.contexts.forEach((context, index) => {
+        if (ids.has(context.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["contexts", index, "id"],
+            message: "Context ids must be unique",
+          });
+        }
+        ids.add(context.id);
+      });
+
+      assessment.questions.forEach((question, index) => {
+        if (question.contextId && !ids.has(question.contextId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["questions", index, "contextId"],
+            message: "contextId must reference a defined context",
+          });
+        }
+      });
+    } else {
+      assessment.questions.forEach((question, index) => {
+        if (question.contextId) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["questions", index, "contextId"],
+            message: "Add a contexts array before referencing a contextId",
+          });
+        }
+      });
+    }
+  });
 
 export type Assessment = z.infer<typeof assessmentSchema>;
 export type AssessmentMeta = z.infer<typeof metaSchema>;

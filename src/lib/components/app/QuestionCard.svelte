@@ -10,6 +10,7 @@ import {
 import { renderWithKatex } from "../../katex";
 import {
   questionWeight,
+  type AssessmentContext,
   type MultiQuestion,
   type OrderingQuestion,
   type Question,
@@ -23,6 +24,7 @@ export let index: number;
 export let totalQuestions: number;
 export let answers: Record<string, AnswerValue>;
 export let currentResult: QuestionResult | null = null;
+export let context: AssessmentContext | null = null;
 export let touchedQuestions: Set<string>;
 export let updateTouched: (question: Question, value: AnswerValue) => void;
 export let setOrderingTouched: (id: string, value: boolean) => void;
@@ -58,6 +60,18 @@ function resetOrdering(question: OrderingQuestion) {
   <CardHeader>
     <CardTitle>Question {index + 1} of {totalQuestions}</CardTitle>
     <CardDescription className="space-y-1 text-sm">
+      {#if context}
+        <div class="space-y-2 rounded-md border bg-muted/40 p-3 text-sm leading-relaxed">
+          {#if context.title}
+            <p class="text-xs font-semibold uppercase text-muted-foreground">
+              {@html renderWithKatex(context.title)}
+            </p>
+          {/if}
+          <div class="space-y-2 text-muted-foreground">
+            {@html renderWithKatex(context.body)}
+          </div>
+        </div>
+      {/if}
       <div class="space-y-2 leading-relaxed">
         {@html renderWithKatex(question.text)}
       </div>

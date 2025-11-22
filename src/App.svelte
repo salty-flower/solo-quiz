@@ -15,7 +15,11 @@ import AppSidebar from "./lib/components/app/AppSidebar.svelte";
 import QuestionCard from "./lib/components/app/QuestionCard.svelte";
 import QuizNavigation from "./lib/components/app/QuizNavigation.svelte";
 import SubmissionSummaryBanner from "./lib/components/app/SubmissionSummaryBanner.svelte";
-import { type Assessment, type Question } from "./lib/schema";
+import {
+  type Assessment,
+  type AssessmentContext,
+  type Question,
+} from "./lib/schema";
 import {
   findExampleAssessment,
   getExampleAssessments,
@@ -62,6 +66,7 @@ let answers: Record<string, AnswerValue> = {};
 let touchedQuestions = new Set<string>();
 let currentIndex = 0;
 let currentQuestion: Question | undefined = undefined;
+let questionContext: AssessmentContext | null = null;
 let currentResult: QuestionResult | null = null;
 let parseErrors: { path: string; message: string }[] = [];
 let elapsedSec = 0;
@@ -79,6 +84,7 @@ const theme = preferences.theme;
 const panelVisibility = preferences.panelVisibility;
 const sidebarVisible = preferences.sidebarVisible;
 const { togglePanel, toggleSidebar, cycleTheme } = preferences;
+let contextMap = new Map<string, AssessmentContext>();
 const {
   assessment: assessmentStore,
   questions: questionsStore,
@@ -162,6 +168,13 @@ $: timeRemaining = $timeRemainingStore;
 $: submitted = $submittedStore;
 $: submission = $submissionStore;
 $: submitDisabledValue = $submitDisabled;
+$: contextMap = assessment?.contexts?.length
+  ? new Map(assessment.contexts.map((context) => [context.id, context]))
+  : new Map();
+$: questionContext =
+  currentQuestion?.contextId != null
+    ? (contextMap.get(currentQuestion.contextId) ?? null)
+    : null;
 
 const formatTime = formatCountdown;
 
@@ -579,6 +592,7 @@ function exportJsonSummary() {
               totalQuestions={questions.length}
               {answers}
               {currentResult}
+              context={questionContext}
               {touchedQuestions}
               {updateTouched}
               {setOrderingTouched}

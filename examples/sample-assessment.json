@@ -6,6 +6,13 @@
     "shuffleQuestions": true,
     "timeLimitSec": 600
   },
+  "contexts": [
+    {
+      "id": "mars-outpost",
+      "title": "Mars outpost briefing",
+      "body": "A research crew is preparing a pressurized habitat on Mars. Solar arrays provide 15 kW at peak output and charge a 50 kWh battery bank overnight. Deliveries arrive in this order: cargo lander, power module, crew vehicle. Use this shared context for the next two questions."
+    }
+  ],
   "questions": [
     {
       "id": "q1",
@@ -70,16 +77,28 @@
     {
       "id": "q5",
       "type": "ordering",
-      "text": "Arrange the planets from the Sun outward (using the first four planets).",
-      "items": ["Earth", "Mercury", "Mars", "Venus"],
-      "correctOrder": ["Mercury", "Venus", "Earth", "Mars"],
+      "contextId": "mars-outpost",
+      "text": "Order the steps mission control follows to bring the habitat online after the cargo lander arrives.",
+      "items": [
+        "Switch on environmental monitors",
+        "Deploy and orient the solar array",
+        "Pressurize the habitat shell",
+        "Connect the battery controller"
+      ],
+      "correctOrder": [
+        "Deploy and orient the solar array",
+        "Connect the battery controller",
+        "Pressurize the habitat shell",
+        "Switch on environmental monitors"
+      ],
       "weight": 1,
-      "tags": ["astronomy"]
+      "tags": ["space systems"]
     },
     {
       "id": "q6",
       "type": "subjective",
-      "text": "In two to three sentences, explain why conservation of energy is useful when solving mechanics problems.",
+      "contextId": "mars-outpost",
+      "text": "Using the Mars outpost briefing, explain why conservation of energy is useful when planning the power budget for night-time operations.",
       "rubrics": [
         {
           "title": "States the principle",
@@ -87,7 +106,7 @@
         },
         {
           "title": "Connects to problem solving",
-          "description": "Explains how the principle simplifies calculations or reduces the number of unknowns in mechanics scenarios."
+          "description": "Explains how the principle simplifies calculations or reduces the number of unknowns in the described scenario."
         },
         {
           "title": "Clarity",
