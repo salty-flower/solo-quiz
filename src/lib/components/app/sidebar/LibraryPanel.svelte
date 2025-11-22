@@ -31,7 +31,6 @@ export let panelVisibility: PanelVisibility;
 export let togglePanel: (key: PanelKey) => void;
 export let recentFiles: RecentFileEntry[] = [];
 export let recentWithAttempts: RecentWithAttempts[] = [];
-export let clearHistory: () => void;
 export let currentAssessmentTitle: string | null = null;
 export let loadRecentAssessment: (
   file: RecentFileEntry,
@@ -41,6 +40,38 @@ export let onRetakeIncorrect: (attempt: SubmissionSummary) => void;
 export let orphanedAttempts: SubmissionSummary[] = [];
 export let formatter: Intl.DateTimeFormat;
 export let incorrectCount: (attempt: SubmissionSummary) => number;
+export let deleteRecentHistory: (names: string[]) => Promise<void> | void;
+export let deleteAttempt: (attemptId: string) => Promise<void> | void;
+export let deleteAttemptsByTitle: (title: string) => Promise<void> | void;
+
+$: deleteAllLabel = recentWithAttempts.some(
+  (entry) => entry.attempts.length === 0,
+)
+  ? "Delete all files without attempts"
+  : "Delete all files and matching attempts";
+
+async function deleteRecent(entry: RecentWithAttempts) {
+  await deleteRecentHistory([entry.file.name]);
+  if (entry.attempts.length > 0) {
+    await deleteAttemptsByTitle(entry.title);
+  }
+}
+
+async function deleteAllRecentFiles() {
+  if (recentWithAttempts.length === 0) return;
+
+  const withoutAttempts = recentWithAttempts.filter(
+    (entry) => entry.attempts.length === 0,
+  );
+  if (withoutAttempts.length > 0) {
+    await deleteRecentHistory(withoutAttempts.map((entry) => entry.file.name));
+    return;
+  }
+
+  await deleteRecentHistory(recentWithAttempts.map((entry) => entry.file.name));
+  const titles = new Set(recentWithAttempts.map((entry) => entry.title));
+  await Promise.all([...titles].map((title) => deleteAttemptsByTitle(title)));
+}
 </script>
 
 <Card>
@@ -81,11 +112,12 @@ export let incorrectCount: (attempt: SubmissionSummary) => number;
             <Button
               variant="ghost"
               size="icon"
-              title="Clear recent files"
-              on:click={() => clearHistory()}
+              title={deleteAllLabel}
+              aria-label={deleteAllLabel}
+              on:click={() => deleteAllRecentFiles()}
             >
               <Trash2 class="h-4 w-4" aria-hidden="true" />
-              <span class="sr-only">Clear recent files</span>
+              <span class="sr-only">{deleteAllLabel}</span>
             </Button>
           {/if}
         </div>
@@ -114,15 +146,28 @@ export let incorrectCount: (attempt: SubmissionSummary) => number;
                       Last opened {formatter.format(new Date(entry.file.lastOpened))}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    class="shrink-0"
-                    on:click={() => loadRecentAssessment(entry.file)}
-                    title={`Load ${entry.title}`}
-                  >
-                    Open
-                  </Button>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      class="shrink-0"
+                      on:click={() => loadRecentAssessment(entry.file)}
+                      title={`Load ${entry.title}`}
+                    >
+                      Open
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      class="h-8 w-8"
+                      title={`Delete ${entry.title} and its attempts`}
+                      aria-label={`Delete ${entry.title} and its attempts`}
+                      on:click={() => deleteRecent(entry)}
+                    >
+                      <Trash2 class="h-4 w-4" aria-hidden="true" />
+                      <span class="sr-only">Delete {entry.title}</span>
+                    </Button>
+                  </div>
                 </div>
 
                 {#if entry.attempts.length > 0}
@@ -168,6 +213,19 @@ export let incorrectCount: (attempt: SubmissionSummary) => number;
                             >
                               <RefreshCw class="mr-1 h-4 w-4" aria-hidden="true" />
                               Retake incorrect
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              class="h-8 w-8"
+                              title="Delete this attempt"
+                              aria-label={`Delete attempt from ${entry.title}`}
+                              on:click={() => deleteAttempt(attempt.id)}
+                            >
+                              <Trash2 class="h-4 w-4" aria-hidden="true" />
+                              <span class="sr-only">
+                                Delete attempt from {entry.title} completed {formatter.format(attempt.completedAt)}
+                              </span>
                             </Button>
                           </div>
                         </div>
@@ -223,6 +281,21 @@ export let incorrectCount: (attempt: SubmissionSummary) => number;
                   >
                     <RefreshCw class="mr-1 h-4 w-4" aria-hidden="true" />
                     Retake incorrect
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    class="h-8 w-8"
+                    title="Delete this attempt"
+                    aria-label={`Delete attempt from ${attempt.assessment.meta.title}`}
+                    on:click={() => deleteAttempt(attempt.id)}
+                  >
+                    <Trash2 class="h-4 w-4" aria-hidden="true" />
+                    <span class="sr-only">
+                      Delete attempt from {attempt.assessment.meta.title} completed
+                      {" "}
+                      {formatter.format(attempt.completedAt)}
+                    </span>
                   </Button>
                 </div>
               </li>

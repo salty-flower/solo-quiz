@@ -37,7 +37,12 @@ import { preferences } from "./lib/stores/preferences";
 import { quiz } from "./lib/stores/quiz";
 import ReviewPage from "./lib/review/ReviewPage.svelte";
 import { llm } from "./lib/stores/llm";
-import { attemptList, getAttempt } from "./lib/stores/attempts";
+import {
+  attemptList,
+  deleteAttempt,
+  deleteAttemptsByTitle,
+  getAttempt,
+} from "./lib/stores/attempts";
 import {
   getReviewPath,
   getHomePath,
@@ -104,7 +109,7 @@ const {
   submitQuiz,
   retakeIncorrectQuestions,
   resetAssessment,
-  clearHistory,
+  deleteRecentHistory,
   teardown,
 } = quiz;
 const { reset: resetLlmState } = llm;
@@ -492,10 +497,12 @@ function exportJsonSummary() {
           {exampleAssessments}
           recentFiles={$recentFiles}
           loadRecentAssessment={handleRecentFile}
-          clearHistory={clearHistory}
+          deleteRecentHistory={deleteRecentHistory}
           attempts={$attemptList}
           onReview={openAttemptHistoryReview}
           onRetakeIncorrect={retakeIncorrectQuestions}
+          deleteAttempt={deleteAttempt}
+          deleteAttemptsByTitle={deleteAttemptsByTitle}
           currentAssessmentTitle={assessment ? assessment.meta.title : null}
           {questions}
           {questionNavStyles}

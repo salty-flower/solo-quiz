@@ -23,10 +23,12 @@ export let recentFiles: RecentFileEntry[] = [];
 export let loadRecentAssessment: (
   file: RecentFileEntry,
 ) => Promise<void> | void;
-export let clearHistory: () => void;
 export let attempts: SubmissionSummary[] = [];
 export let onReview: (attemptId: string) => void;
 export let onRetakeIncorrect: (attempt: SubmissionSummary) => void;
+export let deleteRecentHistory: (names: string[]) => Promise<void> | void;
+export let deleteAttempt: (attemptId: string) => Promise<void> | void;
+export let deleteAttemptsByTitle: (title: string) => Promise<void> | void;
 export let currentAssessmentTitle: string | null = null;
 export let questions: Question[] = [];
 export let questionNavStyles: (question: Question, index: number) => string;
@@ -128,7 +130,7 @@ function incorrectCount(attempt: SubmissionSummary): number {
     {togglePanel}
     {recentFiles}
     {recentWithAttempts}
-    {clearHistory}
+    deleteRecentHistory={deleteRecentHistory}
     {currentAssessmentTitle}
     {loadRecentAssessment}
     {onReview}
@@ -136,5 +138,7 @@ function incorrectCount(attempt: SubmissionSummary): number {
     {orphanedAttempts}
     {formatter}
     {incorrectCount}
+    {deleteAttempt}
+    {deleteAttemptsByTitle}
   />
 </aside>
