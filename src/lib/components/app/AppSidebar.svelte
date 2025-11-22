@@ -1,5 +1,4 @@
 <script lang="ts">
-import { slide } from "svelte/transition";
 import AssessmentPanel from "./sidebar/AssessmentPanel.svelte";
 import LibraryPanel from "./sidebar/LibraryPanel.svelte";
 import QuestionNavigator from "./sidebar/QuestionNavigator.svelte";
@@ -95,14 +94,13 @@ function incorrectCount(attempt: SubmissionSummary): number {
 </script>
 
 <aside
-  class={`w-full space-y-4 lg:w-64 ${
+  class={`w-full space-y-4 lg:w-full ${
     isDropActive ? "outline outline-2 outline-primary" : ""
   }`}
   aria-label="Sidebar"
   on:dragover|preventDefault={onDragOver}
   on:dragleave={onDragLeave}
   on:drop|preventDefault={onDrop}
-  transition:slide
 >
   {#if questions.length > 0}
     <QuestionNavigator
