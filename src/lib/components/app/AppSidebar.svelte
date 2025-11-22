@@ -1,6 +1,15 @@
 <script lang="ts">
 import { slide } from "svelte/transition";
-import { Download, Eye, EyeOff, Trash2, Upload } from "lucide-svelte";
+import {
+  ArrowLeftRight,
+  Download,
+  Eye,
+  EyeOff,
+  History,
+  RefreshCw,
+  Trash2,
+  Upload,
+} from "lucide-svelte";
 import Button from "../ui/Button.svelte";
 import {
   Card,
@@ -15,6 +24,7 @@ import type { Assessment, Question } from "../../schema";
 import type { PanelVisibility, PanelKey } from "../../stores/preferences";
 import type { RecentFileEntry } from "../../storage";
 import type { ExampleAssessment } from "../../example-assessments";
+import type { SubmissionSummary } from "../../results";
 
 const formatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "short",
@@ -32,6 +42,10 @@ export let loadRecentAssessment: (
   file: RecentFileEntry,
 ) => Promise<void> | void;
 export let clearHistory: () => void;
+export let attempts: SubmissionSummary[] = [];
+export let onReview: (attemptId: string) => void;
+export let onRetakeIncorrect: (attempt: SubmissionSummary) => void;
+export let currentAssessmentTitle: string | null = null;
 export let questions: Question[] = [];
 export let questionNavStyles: (question: Question, index: number) => string;
 export let questionNavStatus: (
@@ -44,6 +58,15 @@ export let handleFile: (file: File) => Promise<void> | void;
 
 let fileInput: HTMLInputElement | null = null;
 let isDropActive = false;
+let matchingAttempts: SubmissionSummary[] = [];
+let otherAttempts: SubmissionSummary[] = [];
+
+$: matchingAttempts = attempts.filter(
+  (attempt) => attempt.assessment.meta.title === currentAssessmentTitle,
+);
+$: otherAttempts = attempts.filter(
+  (attempt) => attempt.assessment.meta.title !== currentAssessmentTitle,
+);
 
 function onFileInputChange(event: Event) {
   const target = event.target as HTMLInputElement;
@@ -71,6 +94,10 @@ function onDragOver(event: DragEvent) {
 function onDragLeave(event: DragEvent) {
   event.preventDefault();
   isDropActive = false;
+}
+
+function incorrectCount(attempt: SubmissionSummary): number {
+  return attempt.results.filter((result) => result.status !== "correct").length;
 }
 
 function handleDropzoneKey(event: KeyboardEvent) {
@@ -178,17 +205,15 @@ function handleDropzoneKey(event: KeyboardEvent) {
   <Card>
     <CardHeader className="flex items-start justify-between space-y-0">
       <div>
-        <CardTitle>Recent files</CardTitle>
-        <CardDescription>Stored in IndexedDB or localStorage when available.</CardDescription>
+        <CardTitle>Library</CardTitle>
+        <CardDescription>Access recent files and revisit past attempts.</CardDescription>
       </div>
       <Button
         variant="ghost"
         size="icon"
         class="h-8 w-8"
         aria-pressed={!panelVisibility.recents}
-        title={
-          panelVisibility.recents ? "Show recent files" : "Hide recent files"
-        }
+        title={panelVisibility.recents ? "Show library panel" : "Hide library panel"}
         on:click={() => togglePanel("recents")}
       >
         {#if panelVisibility.recents}
@@ -197,51 +222,181 @@ function handleDropzoneKey(event: KeyboardEvent) {
           <EyeOff class="h-4 w-4" aria-hidden="true" />
         {/if}
         <span class="sr-only">
-          {panelVisibility.recents ? "Show" : "Hide"} recent files
+          {panelVisibility.recents ? "Show" : "Hide"} library panel
         </span>
       </Button>
     </CardHeader>
     {#if !panelVisibility.recents}
-      <CardContent className="space-y-3">
-        {#if recentFiles.length === 0}
-          <p class="text-sm text-muted-foreground">No recent files yet.</p>
-        {:else}
-          <ul class="space-y-2 text-sm">
-            {#each recentFiles as file}
-              <li>
-                <button
-                  type="button"
-                  class="flex w-full flex-col rounded-md border border-border px-3 py-2 text-left transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  on:click={() => loadRecentAssessment(file)}
-                  title={`Load ${file.name}`}
-                >
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="line-clamp-1 font-medium">
-                      {file.meta?.title ?? file.name}
-                    </span>
-                    {#if file.meta?.questionCount != null}
-                      <span class="text-xs text-muted-foreground">
-                        {file.meta.questionCount}
-                        {file.meta.questionCount === 1 ? " question" : " questions"}
+      <CardContent className="space-y-4">
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <p class="flex items-center gap-2 text-sm font-medium">
+              <Upload class="h-4 w-4" aria-hidden="true" />
+              Recent files
+            </p>
+            {#if recentFiles.length > 0}
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Clear recent files"
+                on:click={() => clearHistory()}
+              >
+                <Trash2 class="h-4 w-4" aria-hidden="true" />
+                <span class="sr-only">Clear recent files</span>
+              </Button>
+            {/if}
+          </div>
+
+          {#if recentFiles.length === 0}
+            <p class="text-sm text-muted-foreground">No recent files yet.</p>
+          {:else}
+            <ul class="max-h-48 space-y-2 overflow-y-auto pr-1 text-sm">
+              {#each recentFiles as file}
+                <li>
+                  <button
+                    type="button"
+                    class="flex w-full flex-col rounded-md border border-border px-3 py-2 text-left transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    on:click={() => loadRecentAssessment(file)}
+                    title={`Load ${file.name}`}
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="line-clamp-1 font-medium">
+                        {file.meta?.title ?? file.name}
                       </span>
-                    {/if}
-                  </div>
-                  <span class="line-clamp-1 text-xs text-muted-foreground">{file.name}</span>
-                  <span class="text-xs text-muted-foreground">{formatter.format(new Date(file.lastOpened))}</span>
-                </button>
-              </li>
-            {/each}
-          </ul>
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Clear history"
-            on:click={() => clearHistory()}
-          >
-            <Trash2 class="h-4 w-4" aria-hidden="true" />
-            <span class="sr-only">Clear history</span>
-          </Button>
-        {/if}
+                      {#if file.meta?.questionCount != null}
+                        <span class="text-xs text-muted-foreground">
+                          {file.meta.questionCount}
+                          {file.meta.questionCount === 1 ? " question" : " questions"}
+                        </span>
+                      {/if}
+                    </div>
+                    <span class="line-clamp-1 text-xs text-muted-foreground">{file.name}</span>
+                    <span class="text-xs text-muted-foreground">{formatter.format(new Date(file.lastOpened))}</span>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+
+        <Separator />
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <p class="flex items-center gap-2 text-sm font-medium">
+              <History class="h-4 w-4" aria-hidden="true" />
+              Attempt history
+            </p>
+          </div>
+
+          {#if attempts.length === 0}
+            <p class="text-sm text-muted-foreground">No attempts recorded yet.</p>
+          {:else}
+            {#if matchingAttempts.length > 0}
+              <div class="space-y-2">
+                <p class="text-xs uppercase text-muted-foreground">This assessment</p>
+                <ul class="max-h-44 space-y-2 overflow-y-auto pr-1 text-sm">
+                  {#each matchingAttempts as attempt (attempt.id)}
+                    {@const remaining = incorrectCount(attempt)}
+                    <li class="rounded-md border bg-card/70 p-3">
+                      <div class="flex flex-col gap-2">
+                        <div class="flex items-start gap-2">
+                          <div class="flex-1">
+                            <p class="font-semibold">{attempt.assessment.meta.title}</p>
+                            <p class="text-xs text-muted-foreground">
+                              Completed {formatter.format(attempt.completedAt)} ·
+                              {attempt.deterministicEarned} / {attempt.deterministicMax}
+                              ({attempt.deterministicPercentage.toFixed(1)}%)
+                            </p>
+                          </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          {#if remaining === 0}
+                            Perfect score on deterministic grading.
+                          {:else}
+                            {remaining} {remaining === 1 ? "question" : "questions"} to revisit.
+                          {/if}
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <Button size="sm" variant="outline" on:click={() => onReview(attempt.id)}>
+                            <ArrowLeftRight class="mr-1 h-4 w-4" aria-hidden="true" />
+                            Review
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            on:click={() => onRetakeIncorrect(attempt)}
+                            disabled={remaining === 0}
+                            title={
+                              remaining === 0
+                                ? "All questions were correct"
+                                : "Start a fresh attempt with missed questions"
+                            }
+                          >
+                            <RefreshCw class="mr-1 h-4 w-4" aria-hidden="true" />
+                            Retake incorrect
+                          </Button>
+                        </div>
+                      </div>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+
+            {#if otherAttempts.length > 0}
+              <div class="space-y-2">
+                <p class="text-xs uppercase text-muted-foreground">Other assessments</p>
+                <ul class="max-h-44 space-y-2 overflow-y-auto pr-1 text-sm">
+                  {#each otherAttempts as attempt (attempt.id)}
+                    {@const remaining = incorrectCount(attempt)}
+                    <li class="rounded-md border bg-card/70 p-3">
+                      <div class="flex flex-col gap-2">
+                        <div class="flex items-start gap-2">
+                          <div class="flex-1">
+                            <p class="font-semibold">{attempt.assessment.meta.title}</p>
+                            <p class="text-xs text-muted-foreground">
+                              Completed {formatter.format(attempt.completedAt)} ·
+                              {attempt.deterministicEarned} / {attempt.deterministicMax}
+                              ({attempt.deterministicPercentage.toFixed(1)}%)
+                            </p>
+                          </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          {#if remaining === 0}
+                            Perfect score on deterministic grading.
+                          {:else}
+                            {remaining} {remaining === 1 ? "question" : "questions"} to revisit.
+                          {/if}
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <Button size="sm" variant="outline" on:click={() => onReview(attempt.id)}>
+                            <ArrowLeftRight class="mr-1 h-4 w-4" aria-hidden="true" />
+                            Review
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            on:click={() => onRetakeIncorrect(attempt)}
+                            disabled={remaining === 0}
+                            title={
+                              remaining === 0
+                                ? "All questions were correct"
+                                : "Start a fresh attempt with missed questions"
+                            }
+                          >
+                            <RefreshCw class="mr-1 h-4 w-4" aria-hidden="true" />
+                            Retake incorrect
+                          </Button>
+                        </div>
+                      </div>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+          {/if}
+        </div>
       </CardContent>
     {/if}
   </Card>

@@ -10,11 +10,10 @@ import {
 } from "./lib/components/ui/card";
 import AppHeader from "./lib/components/app/AppHeader.svelte";
 import AppSidebar from "./lib/components/app/AppSidebar.svelte";
-import AttemptHistory from "./lib/components/app/AttemptHistory.svelte";
 import QuestionCard from "./lib/components/app/QuestionCard.svelte";
 import QuizNavigation from "./lib/components/app/QuizNavigation.svelte";
 import SubmissionSummaryBanner from "./lib/components/app/SubmissionSummaryBanner.svelte";
-import { parseAssessment, type Assessment, type Question } from "./lib/schema";
+import { type Assessment, type Question } from "./lib/schema";
 import {
   findExampleAssessment,
   getExampleAssessments,
@@ -433,6 +432,10 @@ function exportJsonSummary() {
           recentFiles={$recentFiles}
           loadRecentAssessment={loadRecentAssessment}
           clearHistory={clearHistory}
+          attempts={$attemptList}
+          onReview={openAttemptHistoryReview}
+          onRetakeIncorrect={retakeIncorrectQuestions}
+          currentAssessmentTitle={assessment ? assessment.meta.title : null}
           {questions}
           {questionNavStyles}
           {questionNavStatus}
@@ -459,15 +462,6 @@ function exportJsonSummary() {
               {/each}
             </ul>
           </Alert>
-        {/if}
-
-        {#if $attemptList.length > 0}
-          <AttemptHistory
-            attempts={$attemptList}
-            onReview={openAttemptHistoryReview}
-            onRetakeIncorrect={retakeIncorrectQuestions}
-            currentAssessmentTitle={assessment ? assessment.meta.title : null}
-          />
         {/if}
 
         {#if !assessment}
