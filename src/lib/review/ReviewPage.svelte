@@ -6,7 +6,7 @@ import type {
   ResultStatus,
   SubmissionSummary,
 } from "../results";
-import type { LlmFeedback } from "../schema";
+import type { AssessmentContext, LlmFeedback } from "../schema";
 import { attempts } from "../stores/attempts";
 import { llm } from "../stores/llm";
 import { getReviewPath, navigate } from "../stores/router";
@@ -47,6 +47,7 @@ let baseSummary: SubmissionSummary | null = null;
 let summary: SubmissionSummary | null = null;
 let activeIndex = 0;
 let currentResult: QuestionResult | null = null;
+let currentContext: AssessmentContext | null = null;
 let visibleEntries: { result: QuestionResult; index: number }[] = [];
 let visibleIndices: number[] = [];
 let statusFilter: ResultStatus | "all" = "all";
@@ -70,6 +71,7 @@ let diffSummary: Record<DiffToken["type"], number> = {
   remove: 0,
   match: 0,
 };
+let contextMap = new Map<string, AssessmentContext>();
 
 $: baseSummary = $attempts.get(attemptId) ?? null;
 $: summary = baseSummary
@@ -170,6 +172,13 @@ $: if (summary && summary.results.length > 0) {
 } else {
   currentResult = null;
 }
+$: contextMap = summary?.assessment.contexts?.length
+  ? new Map(summary.assessment.contexts.map((context) => [context.id, context]))
+  : new Map();
+$: currentContext =
+  currentResult?.question.contextId != null
+    ? (contextMap.get(currentResult.question.contextId) ?? null)
+    : null;
 $: if (currentResult?.requiresManualGrading) {
   initializeWorkspace(currentResult.question.id, {
     rubrics: currentResult.rubrics,
@@ -373,6 +382,7 @@ function applyFeedbackToSummary(
             activeIndex={activeIndex}
             visiblePosition={visiblePosition}
             visibleEntriesLength={visibleEntries.length}
+            context={currentContext}
             bind:showDiffHighlight
             bind:showFeedbackDetails
             answerDiffTokens={answerDiffTokens}

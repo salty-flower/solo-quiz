@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { renderWithKatex } from "../katex";
+import type { AssessmentContext } from "../schema";
 import type {
   QuestionResult,
   ResultStatus,
@@ -25,6 +26,7 @@ export let showDiffHighlight: boolean;
 export let showFeedbackDetails: boolean;
 export let answerDiffTokens: DiffToken[];
 export let diffSummary: Record<DiffToken["type"], number>;
+export let context: AssessmentContext | null = null;
 
 let meta: ReturnType<typeof statusMeta>;
 let subjectiveResult: SubjectiveQuestionResult | null;
@@ -42,6 +44,18 @@ $: subjectiveResult = currentResult.requiresManualGrading
       <span class="text-xs font-normal text-muted-foreground">(original #{activeIndex + 1})</span>
     </CardTitle>
     <CardDescription className="space-y-2 text-sm">
+      {#if context}
+        <div class="space-y-2 rounded-md border bg-muted/40 p-3 text-sm leading-relaxed">
+          {#if context.title}
+            <p class="text-xs font-semibold uppercase text-muted-foreground">
+              {@html renderWithKatex(context.title)}
+            </p>
+          {/if}
+          <div class="space-y-2 text-muted-foreground">
+            {@html renderWithKatex(context.body)}
+          </div>
+        </div>
+      {/if}
       <div class="space-y-2 leading-relaxed">
         {@html renderWithKatex(currentResult.question.text)}
       </div>
