@@ -240,12 +240,19 @@ function evaluateOrderingQuestion(
   question: OrderingQuestion,
   value: AnswerValue,
 ): DeterministicEvaluation {
-  const sequence = Array.isArray(value) ? (value as string[]) : question.items;
+  const sequence =
+    Array.isArray(value) && value.length > 0
+      ? (value as string[])
+      : question.items;
+  const providedSequence = Array.isArray(value) ? (value as string[]) : [];
 
   return {
     userAnswer: sequence.join(" → "),
     correctAnswer: question.correctOrder.join(" → "),
-    isCorrect: arraysEqual(sequence, question.correctOrder),
+    isCorrect:
+      Array.isArray(value) &&
+      value.length > 0 &&
+      arraysEqual(providedSequence, question.correctOrder),
   };
 }
 

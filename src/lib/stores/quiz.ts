@@ -125,9 +125,7 @@ function createQuizStore() {
     const result: Record<string, AnswerValue> = {};
     for (const question of list) {
       if (question.type === "multi" || question.type === "ordering") {
-        result[question.id] = [
-          ...(question.type === "ordering" ? question.items : []),
-        ];
+        result[question.id] = [];
       } else {
         result[question.id] = "";
       }
@@ -250,7 +248,10 @@ function createQuizStore() {
 
   function updateTouched(question: Question, value: AnswerValue) {
     answers.update((prev) => ({ ...prev, [question.id]: value }));
-    const answered = isAnswered(question, value);
+    const answered =
+      question.type === "ordering"
+        ? get(orderingTouched).has(question.id)
+        : isAnswered(question, value);
     touchedQuestions.update((prev) => {
       const clone = new Set(prev);
       if (answered) {
