@@ -487,8 +487,13 @@ function exportJsonSummary() {
 
     <div class="sr-only" aria-live="polite">{navigationAnnouncement}</div>
 
-    <main class={`mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 ${$sidebarVisible ? "lg:flex-row" : ""}`}>
-      {#if $sidebarVisible}
+    <main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 lg:flex-row">
+      <div
+        class={`overflow-hidden transition-[max-height,width] duration-300 ease-in-out ${
+          $sidebarVisible ? "max-h-[2000px] w-full lg:w-64" : "max-h-0 w-full lg:w-0"
+        } ${$sidebarVisible ? "" : "pointer-events-none"} lg:shrink-0`}
+        aria-hidden={!$sidebarVisible}
+      >
         <AppSidebar
           panelVisibility={$panelVisibility}
           togglePanel={togglePanel}
@@ -511,7 +516,7 @@ function exportJsonSummary() {
           downloadExampleAssessment={downloadExampleAssessment}
           handleFile={handleIncomingFile}
         />
-      {/if}
+      </div>
 
       <section class="flex-1 space-y-6">
         {#if $storageNotice}
