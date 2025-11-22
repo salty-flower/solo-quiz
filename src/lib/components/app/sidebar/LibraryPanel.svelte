@@ -128,16 +128,16 @@ async function deleteAllRecentFiles() {
           <ul class="space-y-3 text-sm">
             {#each recentWithAttempts as entry (entry.file.name + entry.file.lastOpened)}
               <li class="rounded-md border border-border bg-card/70 p-3">
-                <div class="flex items-start gap-3">
-                  <div class="flex-1 space-y-1">
-                    <div class="flex items-center gap-2">
-                      <span class="line-clamp-1 font-medium">{entry.title}</span>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                  <div class="min-w-0 flex-1 space-y-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="font-medium leading-tight">{entry.title}</span>
                       {#if entry.title === currentAssessmentTitle}
                         <span class="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary">Current</span>
                       {/if}
                     </div>
                     <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span class="line-clamp-1">{entry.file.name}</span>
+                      <span class="break-all sm:break-normal">{entry.file.name}</span>
                       {#if entry.file.meta?.questionCount != null}
                         <span>· {entry.file.meta.questionCount} {entry.file.meta.questionCount === 1 ? "question" : "questions"}</span>
                       {/if}
@@ -146,11 +146,11 @@ async function deleteAllRecentFiles() {
                       Last opened {formatter.format(new Date(entry.file.lastOpened))}
                     </p>
                   </div>
-                  <div class="flex items-center gap-2">
+                  <div class="flex flex-wrap items-center gap-2 sm:justify-end">
                     <Button
                       size="sm"
                       variant="outline"
-                      class="shrink-0"
+                      class="grow sm:grow-0"
                       on:click={() => loadRecentAssessment(entry.file)}
                       title={`Load ${entry.title}`}
                     >
