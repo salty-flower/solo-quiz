@@ -58,15 +58,32 @@ export let handleFile: (file: File) => Promise<void> | void;
 
 let fileInput: HTMLInputElement | null = null;
 let isDropActive = false;
-let matchingAttempts: SubmissionSummary[] = [];
-let otherAttempts: SubmissionSummary[] = [];
+let recentWithAttempts: {
+  file: RecentFileEntry;
+  title: string;
+  attempts: SubmissionSummary[];
+}[] = [];
+let orphanedAttempts: SubmissionSummary[] = [];
 
-$: matchingAttempts = attempts.filter(
-  (attempt) => attempt.assessment.meta.title === currentAssessmentTitle,
-);
-$: otherAttempts = attempts.filter(
-  (attempt) => attempt.assessment.meta.title !== currentAssessmentTitle,
-);
+$: {
+  const grouped = new Map<string, SubmissionSummary[]>();
+  for (const attempt of attempts) {
+    const title = attempt.assessment.meta.title;
+    const list = grouped.get(title) ?? [];
+    list.push(attempt);
+    grouped.set(title, list);
+  }
+
+  recentWithAttempts = recentFiles.map((file) => {
+    const title = file.meta?.title ?? file.name;
+    return { file, title, attempts: grouped.get(title) ?? [] };
+  });
+
+  const recentTitles = new Set(recentWithAttempts.map((entry) => entry.title));
+  orphanedAttempts = attempts.filter(
+    (attempt) => !recentTitles.has(attempt.assessment.meta.title),
+  );
+}
 
 function onFileInputChange(event: Event) {
   const target = event.target as HTMLInputElement;
@@ -79,14 +96,15 @@ function onFileInputChange(event: Event) {
 function onDrop(event: DragEvent) {
   event.preventDefault();
   isDropActive = false;
-  if (!event.dataTransfer) return;
-  const file = event.dataTransfer.files?.[0];
+  if (!event.dataTransfer || !event.dataTransfer.files?.length) return;
+  const file = event.dataTransfer.files[0];
   if (file) {
     void handleFile(file);
   }
 }
 
 function onDragOver(event: DragEvent) {
+  if (!event.dataTransfer?.types?.includes("Files")) return;
   event.preventDefault();
   isDropActive = true;
 }
@@ -99,69 +117,121 @@ function onDragLeave(event: DragEvent) {
 function incorrectCount(attempt: SubmissionSummary): number {
   return attempt.results.filter((result) => result.status !== "correct").length;
 }
-
-function handleDropzoneKey(event: KeyboardEvent) {
-  if (event.key === "Enter" || event.key === " ") {
-    event.preventDefault();
-    fileInput?.click();
-  }
-}
 </script>
 
-<aside class="w-full space-y-4 lg:w-64" transition:slide={{ duration: 200 }}>
+<aside
+  class={`w-full space-y-4 lg:w-64 ${
+    isDropActive
+      ? "rounded-xl border-2 border-dashed border-primary/60 bg-primary/5"
+      : ""
+  }`}
+  transition:slide={{ duration: 200 }}
+  on:dragover={onDragOver}
+  on:dragenter={onDragOver}
+  on:dragleave={onDragLeave}
+  on:drop={onDrop}
+>
+  {#if assessment}
+    <Card>
+      <CardHeader className="space-y-2">
+        <div class="flex items-start gap-2">
+          <CardTitle className="flex-1">Questions</CardTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="ml-auto h-8 w-8"
+            aria-pressed={!panelVisibility.questions}
+            title={
+              panelVisibility.questions
+                ? "Show question navigator"
+                : "Hide question navigator"
+            }
+            on:click={() => togglePanel("questions")}
+          >
+            {#if panelVisibility.questions}
+              <Eye class="h-4 w-4" aria-hidden="true" />
+            {:else}
+              <EyeOff class="h-4 w-4" aria-hidden="true" />
+            {/if}
+            <span class="sr-only">
+              {panelVisibility.questions ? "Show" : "Hide"} question list
+            </span>
+          </Button>
+        </div>
+        <CardDescription>Jump to any question.</CardDescription>
+      </CardHeader>
+      {#if !panelVisibility.questions}
+        <CardContent>
+          <nav class="grid grid-cols-5 gap-2 text-sm md:grid-cols-4 lg:grid-cols-3">
+            {#each questions as question, index}
+              {@const status = questionNavStatus(question, index)}
+              <button
+                type="button"
+                class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${questionNavStyles(
+                  question,
+                  index,
+                )}`}
+                on:click={() => navigateTo(index)}
+                aria-label={status.label}
+                title={status.label}
+              >
+                <span aria-hidden="true" class="mr-1 text-xs">{status.indicator}</span>
+                <span aria-hidden="true">{index + 1}</span>
+                <span class="sr-only">{status.label}</span>
+              </button>
+            {/each}
+          </nav>
+        </CardContent>
+      {/if}
+    </Card>
+  {/if}
+
   <Card>
-    <CardHeader className="flex items-start justify-between space-y-0">
-      <div>
-        <CardTitle>Assessment</CardTitle>
-        <CardDescription>Import JSON or drag & drop to get started.</CardDescription>
+    <CardHeader className="space-y-2">
+      <div class="flex items-start gap-2">
+        <CardTitle className="flex-1">Assessment</CardTitle>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="ml-auto h-8 w-8"
+          aria-pressed={!panelVisibility.assessment}
+          title={
+            panelVisibility.assessment
+              ? "Show assessment panel"
+              : "Hide assessment panel"
+          }
+          on:click={() => togglePanel("assessment")}
+        >
+          {#if panelVisibility.assessment}
+            <Eye class="h-4 w-4" aria-hidden="true" />
+          {:else}
+            <EyeOff class="h-4 w-4" aria-hidden="true" />
+          {/if}
+          <span class="sr-only">
+            {panelVisibility.assessment ? "Show" : "Hide"} assessment panel
+          </span>
+        </Button>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        aria-pressed={!panelVisibility.assessment}
-        title={
-          panelVisibility.assessment
-            ? "Show assessment panel"
-            : "Hide assessment panel"
-        }
-        on:click={() => togglePanel("assessment")}
-      >
-        {#if panelVisibility.assessment}
-          <Eye class="h-4 w-4" aria-hidden="true" />
-        {:else}
-          <EyeOff class="h-4 w-4" aria-hidden="true" />
-        {/if}
-        <span class="sr-only">
-          {panelVisibility.assessment ? "Show" : "Hide"} assessment panel
-        </span>
-      </Button>
+      <CardDescription>
+        Select a JSON assessment or drop a file anywhere on the sidebar to begin.
+      </CardDescription>
     </CardHeader>
     {#if !panelVisibility.assessment}
       <CardContent className="space-y-4">
-        <div
-          class={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center text-sm transition ${
-            isDropActive ? "border-primary bg-primary/10" : "border-muted"
-          }`}
-          on:dragover|preventDefault={onDragOver}
-          on:dragleave={onDragLeave}
-          on:drop={onDrop}
-          role="button"
-          tabindex="0"
-          aria-label="Load assessment JSON file"
-          on:keydown={handleDropzoneKey}
-        >
-          <p class="font-medium">Drop JSON here</p>
-          <p class="text-muted-foreground">or</p>
+        <div class="flex items-start gap-3">
           <Button
-            size="icon"
+            size="sm"
             variant="secondary"
+            class="shrink-0"
             title="Choose file"
             on:click={() => fileInput?.click()}
           >
-            <Upload class="h-4 w-4" aria-hidden="true" />
-            <span class="sr-only">Choose file</span>
+            <Upload class="mr-2 h-4 w-4" aria-hidden="true" />
+            Import JSON
           </Button>
+          <p class="text-xs text-muted-foreground">
+            You can also drag and drop an assessment file anywhere on this sidebar.
+          </p>
           <input
             class="hidden"
             type="file"
@@ -203,28 +273,30 @@ function handleDropzoneKey(event: KeyboardEvent) {
   </Card>
 
   <Card>
-    <CardHeader className="flex items-start justify-between space-y-0">
-      <div>
-        <CardTitle>Library</CardTitle>
-        <CardDescription>Access recent files and revisit past attempts.</CardDescription>
+    <CardHeader className="space-y-2">
+      <div class="flex items-start gap-2">
+        <CardTitle className="flex-1">Library</CardTitle>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="ml-auto h-8 w-8"
+          aria-pressed={!panelVisibility.recents}
+          title={panelVisibility.recents ? "Show library panel" : "Hide library panel"}
+          on:click={() => togglePanel("recents")}
+        >
+          {#if panelVisibility.recents}
+            <Eye class="h-4 w-4" aria-hidden="true" />
+          {:else}
+            <EyeOff class="h-4 w-4" aria-hidden="true" />
+          {/if}
+          <span class="sr-only">
+            {panelVisibility.recents ? "Show" : "Hide"} library panel
+          </span>
+        </Button>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        aria-pressed={!panelVisibility.recents}
-        title={panelVisibility.recents ? "Show library panel" : "Hide library panel"}
-        on:click={() => togglePanel("recents")}
-      >
-        {#if panelVisibility.recents}
-          <Eye class="h-4 w-4" aria-hidden="true" />
-        {:else}
-          <EyeOff class="h-4 w-4" aria-hidden="true" />
-        {/if}
-        <span class="sr-only">
-          {panelVisibility.recents ? "Show" : "Hide"} library panel
-        </span>
-      </Button>
+      <CardDescription>
+        Open recent files and review attempts connected to each assessment.
+      </CardDescription>
     </CardHeader>
     {#if !panelVisibility.recents}
       <CardContent className="space-y-4">
@@ -247,212 +319,147 @@ function handleDropzoneKey(event: KeyboardEvent) {
             {/if}
           </div>
 
-          {#if recentFiles.length === 0}
+          {#if recentWithAttempts.length === 0}
             <p class="text-sm text-muted-foreground">No recent files yet.</p>
           {:else}
-            <ul class="max-h-48 space-y-2 overflow-y-auto pr-1 text-sm">
-              {#each recentFiles as file}
-                <li>
-                  <button
-                    type="button"
-                    class="flex w-full flex-col rounded-md border border-border px-3 py-2 text-left transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    on:click={() => loadRecentAssessment(file)}
-                    title={`Load ${file.name}`}
-                  >
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="line-clamp-1 font-medium">
-                        {file.meta?.title ?? file.name}
-                      </span>
-                      {#if file.meta?.questionCount != null}
-                        <span class="text-xs text-muted-foreground">
-                          {file.meta.questionCount}
-                          {file.meta.questionCount === 1 ? " question" : " questions"}
-                        </span>
-                      {/if}
+            <ul class="space-y-3 text-sm">
+              {#each recentWithAttempts as entry (entry.file.name + entry.file.lastOpened)}
+                <li class="rounded-md border border-border bg-card/70 p-3">
+                  <div class="flex items-start gap-3">
+                    <div class="flex-1 space-y-1">
+                      <div class="flex items-center gap-2">
+                        <span class="line-clamp-1 font-medium">{entry.title}</span>
+                        {#if entry.title === currentAssessmentTitle}
+                          <span class="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary">Current</span>
+                        {/if}
+                      </div>
+                      <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span class="line-clamp-1">{entry.file.name}</span>
+                        {#if entry.file.meta?.questionCount != null}
+                          <span>· {entry.file.meta.questionCount} {entry.file.meta.questionCount === 1 ? "question" : "questions"}</span>
+                        {/if}
+                      </div>
+                      <p class="text-xs text-muted-foreground">
+                        Last opened {formatter.format(new Date(entry.file.lastOpened))}
+                      </p>
                     </div>
-                    <span class="line-clamp-1 text-xs text-muted-foreground">{file.name}</span>
-                    <span class="text-xs text-muted-foreground">{formatter.format(new Date(file.lastOpened))}</span>
-                  </button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      class="shrink-0"
+                      on:click={() => loadRecentAssessment(entry.file)}
+                      title={`Load ${entry.title}`}
+                    >
+                      Open
+                    </Button>
+                  </div>
+
+                  {#if entry.attempts.length > 0}
+                    <details class="mt-3 space-y-2 rounded-md border bg-muted/60 p-3 text-sm" open={entry.title === currentAssessmentTitle}>
+                      <summary class="flex cursor-pointer items-center justify-between font-medium">
+                        <span class="flex items-center gap-2">
+                          <History class="h-4 w-4" aria-hidden="true" />
+                          Past attempts
+                        </span>
+                        <span class="text-xs text-muted-foreground">{entry.attempts.length}</span>
+                      </summary>
+                      <div class="space-y-2">
+                        {#each entry.attempts as attempt (attempt.id)}
+                          {@const remaining = incorrectCount(attempt)}
+                          <div class="rounded-md border bg-background p-2">
+                            <p class="text-xs text-muted-foreground">
+                              Completed {formatter.format(attempt.completedAt)} ·
+                              {attempt.deterministicEarned} / {attempt.deterministicMax}
+                              ({attempt.deterministicPercentage.toFixed(1)}%)
+                            </p>
+                            <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              {#if remaining === 0}
+                                Perfect score on deterministic grading.
+                              {:else}
+                                {remaining} {remaining === 1 ? "question" : "questions"} to revisit.
+                              {/if}
+                            </div>
+                            <div class="mt-2 flex flex-wrap items-center gap-2">
+                              <Button size="sm" variant="outline" on:click={() => onReview(attempt.id)}>
+                                <ArrowLeftRight class="mr-1 h-4 w-4" aria-hidden="true" />
+                                Review
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                on:click={() => onRetakeIncorrect(attempt)}
+                                disabled={remaining === 0}
+                                title={
+                                  remaining === 0
+                                    ? "All questions were correct"
+                                    : "Start a fresh attempt with missed questions"
+                                }
+                              >
+                                <RefreshCw class="mr-1 h-4 w-4" aria-hidden="true" />
+                                Retake incorrect
+                              </Button>
+                            </div>
+                          </div>
+                        {/each}
+                      </div>
+                    </details>
+                  {/if}
                 </li>
               {/each}
             </ul>
           {/if}
         </div>
 
-        <Separator />
-
-        <div class="space-y-2">
-          <div class="flex items-center justify-between gap-2">
+        {#if orphanedAttempts.length > 0}
+          <Separator />
+          <div class="space-y-2">
             <p class="flex items-center gap-2 text-sm font-medium">
               <History class="h-4 w-4" aria-hidden="true" />
-              Attempt history
+              Attempts without a recent file
             </p>
+            <ul class="space-y-2 text-sm">
+              {#each orphanedAttempts as attempt (attempt.id)}
+                {@const remaining = incorrectCount(attempt)}
+                <li class="rounded-md border bg-card/70 p-3">
+                  <p class="font-semibold">{attempt.assessment.meta.title}</p>
+                  <p class="text-xs text-muted-foreground">
+                    Completed {formatter.format(attempt.completedAt)} ·
+                    {attempt.deterministicEarned} / {attempt.deterministicMax}
+                    ({attempt.deterministicPercentage.toFixed(1)}%)
+                  </p>
+                  <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    {#if remaining === 0}
+                      Perfect score on deterministic grading.
+                    {:else}
+                      {remaining} {remaining === 1 ? "question" : "questions"} to revisit.
+                    {/if}
+                  </div>
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <Button size="sm" variant="outline" on:click={() => onReview(attempt.id)}>
+                      <ArrowLeftRight class="mr-1 h-4 w-4" aria-hidden="true" />
+                      Review
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      on:click={() => onRetakeIncorrect(attempt)}
+                      disabled={remaining === 0}
+                      title={
+                        remaining === 0
+                          ? "All questions were correct"
+                          : "Start a fresh attempt with missed questions"
+                      }
+                    >
+                      <RefreshCw class="mr-1 h-4 w-4" aria-hidden="true" />
+                      Retake incorrect
+                    </Button>
+                  </div>
+                </li>
+              {/each}
+            </ul>
           </div>
-
-          {#if attempts.length === 0}
-            <p class="text-sm text-muted-foreground">No attempts recorded yet.</p>
-          {:else}
-            {#if matchingAttempts.length > 0}
-              <div class="space-y-2">
-                <p class="text-xs uppercase text-muted-foreground">This assessment</p>
-                <ul class="max-h-44 space-y-2 overflow-y-auto pr-1 text-sm">
-                  {#each matchingAttempts as attempt (attempt.id)}
-                    {@const remaining = incorrectCount(attempt)}
-                    <li class="rounded-md border bg-card/70 p-3">
-                      <div class="flex flex-col gap-2">
-                        <div class="flex items-start gap-2">
-                          <div class="flex-1">
-                            <p class="font-semibold">{attempt.assessment.meta.title}</p>
-                            <p class="text-xs text-muted-foreground">
-                              Completed {formatter.format(attempt.completedAt)} ·
-                              {attempt.deterministicEarned} / {attempt.deterministicMax}
-                              ({attempt.deterministicPercentage.toFixed(1)}%)
-                            </p>
-                          </div>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          {#if remaining === 0}
-                            Perfect score on deterministic grading.
-                          {:else}
-                            {remaining} {remaining === 1 ? "question" : "questions"} to revisit.
-                          {/if}
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <Button size="sm" variant="outline" on:click={() => onReview(attempt.id)}>
-                            <ArrowLeftRight class="mr-1 h-4 w-4" aria-hidden="true" />
-                            Review
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            on:click={() => onRetakeIncorrect(attempt)}
-                            disabled={remaining === 0}
-                            title={
-                              remaining === 0
-                                ? "All questions were correct"
-                                : "Start a fresh attempt with missed questions"
-                            }
-                          >
-                            <RefreshCw class="mr-1 h-4 w-4" aria-hidden="true" />
-                            Retake incorrect
-                          </Button>
-                        </div>
-                      </div>
-                    </li>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
-
-            {#if otherAttempts.length > 0}
-              <div class="space-y-2">
-                <p class="text-xs uppercase text-muted-foreground">Other assessments</p>
-                <ul class="max-h-44 space-y-2 overflow-y-auto pr-1 text-sm">
-                  {#each otherAttempts as attempt (attempt.id)}
-                    {@const remaining = incorrectCount(attempt)}
-                    <li class="rounded-md border bg-card/70 p-3">
-                      <div class="flex flex-col gap-2">
-                        <div class="flex items-start gap-2">
-                          <div class="flex-1">
-                            <p class="font-semibold">{attempt.assessment.meta.title}</p>
-                            <p class="text-xs text-muted-foreground">
-                              Completed {formatter.format(attempt.completedAt)} ·
-                              {attempt.deterministicEarned} / {attempt.deterministicMax}
-                              ({attempt.deterministicPercentage.toFixed(1)}%)
-                            </p>
-                          </div>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          {#if remaining === 0}
-                            Perfect score on deterministic grading.
-                          {:else}
-                            {remaining} {remaining === 1 ? "question" : "questions"} to revisit.
-                          {/if}
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <Button size="sm" variant="outline" on:click={() => onReview(attempt.id)}>
-                            <ArrowLeftRight class="mr-1 h-4 w-4" aria-hidden="true" />
-                            Review
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            on:click={() => onRetakeIncorrect(attempt)}
-                            disabled={remaining === 0}
-                            title={
-                              remaining === 0
-                                ? "All questions were correct"
-                                : "Start a fresh attempt with missed questions"
-                            }
-                          >
-                            <RefreshCw class="mr-1 h-4 w-4" aria-hidden="true" />
-                            Retake incorrect
-                          </Button>
-                        </div>
-                      </div>
-                    </li>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
-          {/if}
-        </div>
+        {/if}
       </CardContent>
     {/if}
   </Card>
-
-  {#if assessment}
-    <Card>
-      <CardHeader className="flex items-start justify-between space-y-0">
-        <div>
-          <CardTitle>Questions</CardTitle>
-          <CardDescription>Jump to any question.</CardDescription>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          class="h-8 w-8"
-          aria-pressed={!panelVisibility.questions}
-          title={
-            panelVisibility.questions
-              ? "Show question navigator"
-              : "Hide question navigator"
-          }
-          on:click={() => togglePanel("questions")}
-        >
-          {#if panelVisibility.questions}
-            <Eye class="h-4 w-4" aria-hidden="true" />
-          {:else}
-            <EyeOff class="h-4 w-4" aria-hidden="true" />
-          {/if}
-          <span class="sr-only">
-            {panelVisibility.questions ? "Show" : "Hide"} question list
-          </span>
-        </Button>
-      </CardHeader>
-      {#if !panelVisibility.questions}
-        <CardContent>
-          <nav class="grid grid-cols-5 gap-2 text-sm md:grid-cols-4 lg:grid-cols-3">
-            {#each questions as question, index}
-              {@const status = questionNavStatus(question, index)}
-              <button
-                type="button"
-                class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${questionNavStyles(
-                  question,
-                  index,
-                )}`}
-                on:click={() => navigateTo(index)}
-                aria-label={status.label}
-                title={status.label}
-              >
-                <span aria-hidden="true" class="mr-1 text-xs">{status.indicator}</span>
-                <span aria-hidden="true">{index + 1}</span>
-                <span class="sr-only">{status.label}</span>
-              </button>
-            {/each}
-          </nav>
-        </CardContent>
-      {/if}
-    </Card>
-  {/if}
 </aside>

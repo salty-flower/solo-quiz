@@ -1,6 +1,8 @@
 <script lang="ts">
 import { onDestroy, onMount, tick } from "svelte";
 import Alert from "./lib/components/ui/Alert.svelte";
+import Button from "./lib/components/ui/Button.svelte";
+import Dialog from "./lib/components/ui/Dialog.svelte";
 import {
   Card,
   CardContent,
@@ -45,6 +47,7 @@ import {
 import { formatCountdown } from "./lib/utils/time";
 import { triggerDownload } from "./lib/utils/download";
 import { storageNotice } from "./lib/storage-notices";
+import type { RecentFileEntry } from "./lib/storage";
 
 let questionElement: HTMLDivElement | null = null;
 let requireAllAnsweredChecked = false;
@@ -64,6 +67,9 @@ let submission: SubmissionSummary | null = null;
 let submitDisabledValue = false;
 let reviewAttemptId: string | null = null;
 let navigationAnnouncement = "";
+let confirmReplacementOpen = false;
+let pendingImportLabel = "";
+let pendingImportAction: (() => void | Promise<void>) | null = null;
 const theme = preferences.theme;
 const panelVisibility = preferences.panelVisibility;
 const sidebarVisible = preferences.sidebarVisible;
@@ -89,8 +95,8 @@ const {
   progressValue,
   submitDisabled,
   refreshRecentFiles,
-  handleFile,
-  loadRecentAssessment,
+  handleFile: handleFileFromStore,
+  loadRecentAssessment: loadRecentAssessmentFromStore,
   updateTouched,
   setOrderingTouched,
   setCurrentIndex,
@@ -104,8 +110,20 @@ const {
 const { reset: resetLlmState } = llm;
 const exampleAssessments = getExampleAssessments();
 
-onMount(async () => {
-  await refreshRecentFiles();
+onMount(() => {
+  void refreshRecentFiles();
+
+  const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+    if (!assessmentInProgress()) return;
+    event.preventDefault();
+    event.returnValue = "You have an assessment in progress.";
+  };
+
+  window.addEventListener("beforeunload", handleBeforeUnload);
+
+  return () => {
+    window.removeEventListener("beforeunload", handleBeforeUnload);
+  };
 });
 
 onDestroy(() => {
@@ -151,6 +169,39 @@ function parseReviewPath(path: string): string | null {
   return null;
 }
 
+function assessmentInProgress() {
+  return Boolean(assessment && !submitted && questions.length > 0);
+}
+
+function requestAssessmentReplacement(
+  action: () => void | Promise<void>,
+  label: string,
+) {
+  if (assessmentInProgress()) {
+    pendingImportAction = action;
+    pendingImportLabel = label;
+    confirmReplacementOpen = true;
+    return;
+  }
+
+  void action();
+}
+
+function confirmAssessmentReplacement() {
+  if (pendingImportAction) {
+    void pendingImportAction();
+  }
+  confirmReplacementOpen = false;
+  pendingImportAction = null;
+  pendingImportLabel = "";
+}
+
+function cancelAssessmentReplacement() {
+  confirmReplacementOpen = false;
+  pendingImportAction = null;
+  pendingImportLabel = "";
+}
+
 function openReviewPage() {
   if (!submission) return;
   navigate(getReviewPath(submission.id));
@@ -175,11 +226,22 @@ function onWindowDragOver(event: DragEvent) {
 
 function onWindowDrop(event: DragEvent) {
   event.preventDefault();
-  if (!event.dataTransfer) return;
-  const file = event.dataTransfer.files?.[0];
+  if (!event.dataTransfer?.files?.length) return;
+  const file = event.dataTransfer.files[0];
   if (file) {
-    void handleFile(file);
+    handleIncomingFile(file);
   }
+}
+
+function handleIncomingFile(file: File) {
+  requestAssessmentReplacement(() => handleFileFromStore(file), file.name);
+}
+
+function handleRecentFile(entry: RecentFileEntry) {
+  requestAssessmentReplacement(
+    () => loadRecentAssessmentFromStore(entry),
+    entry.meta?.title ?? entry.name,
+  );
 }
 
 function questionNavStyles(question: Question, index: number): string {
@@ -430,7 +492,7 @@ function exportJsonSummary() {
           setRequireAllAnswered={setRequireAllAnswered}
           {exampleAssessments}
           recentFiles={$recentFiles}
-          loadRecentAssessment={loadRecentAssessment}
+          loadRecentAssessment={handleRecentFile}
           clearHistory={clearHistory}
           attempts={$attemptList}
           onReview={openAttemptHistoryReview}
@@ -441,7 +503,7 @@ function exportJsonSummary() {
           {questionNavStatus}
           {navigateTo}
           downloadExampleAssessment={downloadExampleAssessment}
-          handleFile={handleFile}
+          handleFile={handleIncomingFile}
         />
       {/if}
 
@@ -526,4 +588,28 @@ function exportJsonSummary() {
     </main>
   </div>
 {/if}
+
+<Dialog
+  open={confirmReplacementOpen}
+  title="Replace current assessment?"
+  on:close={cancelAssessmentReplacement}
+>
+  <p>
+    {pendingImportLabel
+      ? `You're about to load ${pendingImportLabel}.`
+      : "You're about to load a new assessment."}
+  </p>
+  <p class="text-sm text-muted-foreground">
+    You have an assessment in progress. Switching files will reset your current answers and timer.
+    Continue?
+  </p>
+  <div class="flex justify-end gap-3">
+    <Button variant="outline" on:click={cancelAssessmentReplacement}>
+      Stay on current assessment
+    </Button>
+    <Button variant="destructive" on:click={confirmAssessmentReplacement}>
+      Load new assessment
+    </Button>
+  </div>
+</Dialog>
 
