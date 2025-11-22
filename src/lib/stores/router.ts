@@ -31,22 +31,26 @@ let homePath =
     ? initialPath
     : deriveBasePath(initialPath);
 
-const path = writable(initialRoute || "/");
+const path = writable(initialRoute || "/", (set) => {
+  if (typeof window === "undefined") return () => {};
 
-function updateFromLocation() {
-  if (typeof window === "undefined") return;
-  const nextRoute = getCurrentRoute();
-  path.set(nextRoute);
-  if (!isReviewPath(nextRoute)) {
-    const nextPath = getCurrentPathname();
-    homePath = nextPath;
-  }
-}
+  const updateFromLocation = () => {
+    const nextRoute = getCurrentRoute();
+    set(nextRoute);
+    if (!isReviewPath(nextRoute)) {
+      const nextPath = getCurrentPathname();
+      homePath = nextPath;
+    }
+  };
 
-if (typeof window !== "undefined") {
   window.addEventListener("popstate", updateFromLocation);
   window.addEventListener("hashchange", updateFromLocation);
-}
+
+  return () => {
+    window.removeEventListener("popstate", updateFromLocation);
+    window.removeEventListener("hashchange", updateFromLocation);
+  };
+});
 
 export const routePath = {
   subscribe: path.subscribe,

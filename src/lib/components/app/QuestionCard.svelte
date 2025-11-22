@@ -33,9 +33,11 @@ function moveOrdering(
   itemIndex: number,
   direction: -1 | 1,
 ) {
-  const current = Array.isArray(answers[question.id])
-    ? ([...(answers[question.id] as string[])] as string[])
-    : [...question.items];
+  const currentValue = answers[question.id];
+  const current =
+    Array.isArray(currentValue) && currentValue.length > 0
+      ? ([...currentValue] as string[])
+      : [...question.items];
   const targetIndex = itemIndex + direction;
   if (targetIndex < 0 || targetIndex >= current.length) return;
   [current[itemIndex], current[targetIndex]] = [
@@ -183,15 +185,20 @@ function resetOrdering(question: OrderingQuestion) {
           value={answers[question.id] as string}
           on:input={(event) => updateTouched(question, (event.target as HTMLInputElement).value)}
         />
-      {:else if question.type === "ordering"}
-        {@const orderingQuestion = question as OrderingQuestion}
-        <div class="space-y-2">
-          {#each (answers[orderingQuestion.id] as string[]) as item, itemIndex}
-            <div class="flex items-center gap-2 rounded-md border bg-card/60 px-3 py-2 text-sm">
-              <span class="flex-1">
-                {@html renderWithKatex(item)}
-              </span>
-              <div class="flex items-center gap-1">
+{:else if question.type === "ordering"}
+  {@const orderingQuestion = question as OrderingQuestion}
+  {@const orderingSequence =
+    Array.isArray(answers[orderingQuestion.id]) &&
+    (answers[orderingQuestion.id] as string[]).length > 0
+      ? (answers[orderingQuestion.id] as string[])
+      : orderingQuestion.items}
+  <div class="space-y-2">
+    {#each orderingSequence as item, itemIndex}
+      <div class="flex items-center gap-2 rounded-md border bg-card/60 px-3 py-2 text-sm">
+        <span class="flex-1">
+          {@html renderWithKatex(item)}
+        </span>
+        <div class="flex items-center gap-1">
                 <Button
                   size="icon"
                   variant="ghost"
