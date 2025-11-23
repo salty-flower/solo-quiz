@@ -65,7 +65,7 @@ let questions: Question[] = [];
 let answers: Record<string, AnswerValue> = {};
 let touchedQuestions = new Set<string>();
 let currentIndex = 0;
-let currentQuestion: Question | undefined = undefined;
+let currentQuestion: Question | undefined;
 let questionContext: AssessmentContext | null = null;
 let currentResult: QuestionResult | null = null;
 let parseErrors: { path: string; message: string }[] = [];

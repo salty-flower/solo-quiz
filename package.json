@@ -26,10 +26,10 @@
     "markdown-it": "^14.1.0",
     "shadcn-svelte": "^1.0.12",
     "svelte": "^5.43.14",
-    "zod": "^3.25.76"
+    "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.3.7",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@tailwindcss/forms": "^0.5.10",
     "@tsconfig/svelte": "^5.0.6",
@@ -37,17 +37,17 @@
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.10.1",
     "autoprefixer": "^10.4.22",
-    "cross-env": "^7.0.3",
-    "jsdom": "^25.0.1",
+    "cross-env": "^10.1.0",
+    "jsdom": "^27.2.0",
     "postcss": "^8.5.6",
     "rolldown-vite": "^7.2.7",
     "svelte-check": "^4.3.4",
-    "tailwindcss": "^3.4.18",
+    "tailwindcss": "^4.1.17",
     "tsx": "^4.20.6",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
-    "vite-plugin-singlefile": "^0.13.5",
-    "vitest": "^2.1.9",
+    "vite-plugin-singlefile": "^2.3.0",
+    "vitest": "^4.0.13",
     "zod-to-json-schema": "^3.25.0"
   }
 }
