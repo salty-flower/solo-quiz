@@ -35,9 +35,19 @@ interface SoloQuizDB extends DBSchema {
 
 let dbPromise: Promise<IDBPDatabase<SoloQuizDB> | null> | null = null;
 const memoryRecents: RecentFileEntry[] = [];
+let warnedAboutEphemeralRecents = false;
+
+function noteEphemeralRecents() {
+  if (warnedAboutEphemeralRecents) return;
+  reportStorageIssue(
+    "Persistent storage is unavailable; recent files will only last for this session.",
+  );
+  warnedAboutEphemeralRecents = true;
+}
 
 async function getDb(): Promise<IDBPDatabase<SoloQuizDB> | null> {
   if (!isIndexedDbAvailable()) {
+    noteEphemeralRecents();
     return null;
   }
 
@@ -53,6 +63,7 @@ async function getDb(): Promise<IDBPDatabase<SoloQuizDB> | null> {
         "IndexedDB unavailable, falling back to memory store",
         error,
       );
+      noteEphemeralRecents();
       return null;
     });
   }

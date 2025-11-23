@@ -49,5 +49,12 @@
     "vite-plugin-singlefile": "^0.13.5",
     "vitest": "^2.1.9",
     "zod-to-json-schema": "^3.25.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "vitest>vite": "6.0.11",
+      "vite-node>vite": "6.0.11",
+      "@vitest/mocker>vite": "6.0.11"
+    }
   }
 }
