@@ -147,14 +147,17 @@ function evaluateDeterministicQuestion(
     case "ordering":
       return evaluateOrderingQuestion(question, value);
     default: {
-      const _exhaustive: never = question;
-      return {
-        userAnswer: "",
-        correctAnswer: "",
-        isCorrect: false,
-      } satisfies DeterministicEvaluation;
+      return assertUnreachable(question);
     }
   }
+}
+
+function assertUnreachable(value: never): never {
+  const fallback =
+    typeof value === "object" && value && "type" in value
+      ? ((value as { type?: string }).type ?? "unknown")
+      : "unknown";
+  throw new Error(`Unhandled deterministic question type: ${fallback}`);
 }
 
 function evaluateSingleChoice(

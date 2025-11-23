@@ -75,7 +75,7 @@ function buildWorkspace(
   maxScore: number,
   existing?: GradingWorkspace,
 ): GradingWorkspace {
-  const rubricBreakdown = rubrics.map((rubric, _index) => {
+  const rubricBreakdown = rubrics.map((rubric) => {
     const previous = existing?.rubricBreakdown.find(
       (entry) => entry.rubric === rubric.title,
     );
@@ -271,7 +271,7 @@ function createLlmStore() {
   ) {
     workspaces.update((prev) => {
       const existing = prev[questionId];
-      const rubricBreakdown = feedback.rubricBreakdown.map((entry, _index) => {
+      const rubricBreakdown = feedback.rubricBreakdown.map((entry) => {
         const template = existing?.rubricBreakdown.find(
           (rubric) => rubric.rubric === entry.rubric,
         );
