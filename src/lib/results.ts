@@ -147,7 +147,7 @@ function evaluateDeterministicQuestion(
     case "ordering":
       return evaluateOrderingQuestion(question, value);
     default: {
-      const exhaustive: never = question;
+      const _exhaustive: never = question;
       return {
         userAnswer: "",
         correctAnswer: "",

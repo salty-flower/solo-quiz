@@ -3,10 +3,13 @@ import type { SubjectiveQuestion } from "./schema";
 import { llmFeedbackSchema } from "./schema";
 
 export const llmFeedbackJsonSchema = JSON.stringify(
-  zodToJsonSchema(llmFeedbackSchema, {
-    name: "SoloQuizSubjectiveFeedback",
-    target: "jsonSchema7",
-  }),
+  zodToJsonSchema(
+    llmFeedbackSchema as unknown as Parameters<typeof zodToJsonSchema>[0],
+    {
+      name: "SoloQuizSubjectiveFeedback",
+      target: "jsonSchema7",
+    },
+  ),
   null,
   2,
 );
