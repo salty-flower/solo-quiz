@@ -505,6 +505,7 @@ function exportJsonSummary() {
         class={`overflow-hidden transition-[max-height,width] duration-300 ease-in-out ${
           $sidebarVisible ? "max-h-[2000px] w-full lg:w-64" : "max-h-0 w-full lg:w-0"
         } ${$sidebarVisible ? "" : "pointer-events-none"} lg:shrink-0`}
+        inert={!$sidebarVisible}
         aria-hidden={!$sidebarVisible}
       >
         <AppSidebar
