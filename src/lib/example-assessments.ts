@@ -1,5 +1,5 @@
 import type { Assessment } from "./schema";
-import sampleAssessmentJson from "../../examples/sample-assessment.json" assert {
+import sampleAssessmentJson from "../../examples/sample-assessment.json" with {
   type: "json",
 };
 
