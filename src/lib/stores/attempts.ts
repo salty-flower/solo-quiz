@@ -26,9 +26,21 @@ interface AttemptsDB extends DBSchema {
 
 let dbPromise: Promise<IDBPDatabase<AttemptsDB> | null> | null = null;
 const memoryAttempts: StoredSubmissionSummary[] = [];
+let attemptStorageFallbackNotified = false;
+
+function notifyAttemptStorageFallback(): void {
+  if (attemptStorageFallbackNotified) return;
+  reportStorageIssue(
+    "Persistent storage is unavailable; attempts will only be kept for this session.",
+  );
+  attemptStorageFallbackNotified = true;
+}
 
 async function getDb(): Promise<IDBPDatabase<AttemptsDB> | null> {
-  if (!isIndexedDbAvailable()) return null;
+  if (!isIndexedDbAvailable()) {
+    notifyAttemptStorageFallback();
+    return null;
+  }
 
   if (!dbPromise) {
     dbPromise = openDB<AttemptsDB>(attemptsDbName, 1, {
@@ -42,6 +54,7 @@ async function getDb(): Promise<IDBPDatabase<AttemptsDB> | null> {
         "IndexedDB unavailable, falling back to memory store",
         error,
       );
+      notifyAttemptStorageFallback();
       return null;
     });
   }
@@ -89,6 +102,12 @@ function readLocalAttempts(): StoredSubmissionSummary[] {
       return [...memoryAttempts];
     }
     const filtered = parsed.filter(isStoredAttempt);
+    if (filtered.length !== parsed.length) {
+      reportStorageIssue(
+        "Some saved attempts could not be read and were removed.",
+      );
+      persistSnapshot(filtered);
+    }
     return filtered;
   } catch (error) {
     console.warn("Unable to parse local attempts cache; clearing", error);
