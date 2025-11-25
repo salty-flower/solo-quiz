@@ -5,6 +5,7 @@ import type { HTMLButtonAttributes } from "svelte/elements";
 export let type: HTMLButtonAttributes["type"] = "button";
 export let variant:
   | "default"
+  | "outline"
   | "outline-solid"
   | "ghost"
   | "secondary"
@@ -24,6 +25,8 @@ const base =
 
 const variants: Record<typeof variant, string> = {
   default: "bg-primary text-primary-foreground hover:bg-primary/90",
+  "outline-solid":
+    "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
   outline:
     "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
   ghost: "hover:bg-accent hover:text-accent-foreground",
