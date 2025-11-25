@@ -44,7 +44,7 @@ import { llm } from "./lib/stores/llm";
 import {
   attemptList,
   deleteAttempt,
-  deleteAttemptsByTitle,
+  deleteAttemptsByFingerprint,
   getAttempt,
 } from "./lib/stores/attempts";
 import {
@@ -582,7 +582,7 @@ function exportJsonSummary() {
           onReview={openAttemptHistoryReview}
           onRetakeIncorrect={retakeIncorrectQuestions}
           deleteAttempt={deleteAttempt}
-          deleteAttemptsByTitle={deleteAttemptsByTitle}
+          deleteAttemptsByFingerprint={deleteAttemptsByFingerprint}
           currentAssessmentTitle={assessment ? assessment.meta.title : null}
           {questions}
           {questionNavStyles}

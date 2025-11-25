@@ -8,6 +8,11 @@ import {
   safeLocalStorageRemove,
   safeLocalStorageSet,
 } from "../utils/persistence";
+import {
+  createAssessmentFingerprint,
+  type AssessmentFingerprint,
+  fingerprintsMatch,
+} from "../utils/assessment-fingerprint";
 import type { SubmissionSummary } from "../results";
 
 const { attemptsDbName, attemptsStore, attemptsLocal } = STORAGE_KEYS;
@@ -268,11 +273,22 @@ export async function deleteAttempt(attemptId: string) {
   await persistAttemptMap(limited);
 }
 
-export async function deleteAttemptsByTitle(title: string) {
-  const filtered = [...get(attemptMap).values()].filter(
-    (entry) => entry.assessment.meta.title !== title,
-  );
+export async function deleteAttemptsByFingerprint(
+  fingerprint: AssessmentFingerprint | null,
+  titleFallback: string,
+) {
+  const filtered = [...get(attemptMap).values()].filter((entry) => {
+    if (!fingerprint) {
+      return entry.assessment.meta.title !== titleFallback;
+    }
+    const attemptFingerprint = createAssessmentFingerprint(entry.assessment);
+    return !fingerprintsMatch(attemptFingerprint, fingerprint);
+  });
   const next = toLimitedMap(filtered);
   attemptMap.set(next);
   await persistAttemptMap(next);
+}
+
+export async function deleteAttemptsByTitle(title: string) {
+  await deleteAttemptsByFingerprint(null, title);
 }
