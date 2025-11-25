@@ -192,23 +192,35 @@ function createQuizStore() {
     }
   }
 
-  async function handleFile(file: File) {
+  async function importAssessmentContent(content: string, sourceName: string) {
     try {
-      const text = await file.text();
-      const raw = JSON.parse(text);
+      const raw = JSON.parse(content);
       const result = parseAssessment(raw);
       if (!result.ok) {
         parseErrors.set(result.issues);
         assessment.set(null);
         questions.set([]);
-        return;
+        return { ok: false };
       }
-      await loadAssessment(result.data, { name: file.name, content: text });
+      await loadAssessment(result.data, { name: sourceName, content });
+      return { ok: true };
     } catch (error) {
-      parseErrors.set([{ path: "file", message: (error as Error).message }]);
+      parseErrors.set([
+        { path: sourceName, message: (error as Error).message },
+      ]);
       assessment.set(null);
       questions.set([]);
+      return { ok: false };
     }
+  }
+
+  async function handleFile(file: File) {
+    const text = await file.text();
+    return importAssessmentContent(text, file.name);
+  }
+
+  async function handleClipboardContent(content: string) {
+    return importAssessmentContent(content, "Clipboard assessment");
   }
 
   async function loadRecentAssessment(entry: RecentFileEntry) {
@@ -359,6 +371,7 @@ function createQuizStore() {
     refreshRecentFiles,
     loadAssessment,
     handleFile,
+    handleClipboardContent,
     loadRecentAssessment,
     updateTouched,
     setOrderingTouched,
