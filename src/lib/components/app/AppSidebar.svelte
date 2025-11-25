@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Upload } from "lucide-svelte";
 import AssessmentPanel from "./sidebar/AssessmentPanel.svelte";
 import LibraryPanel from "./sidebar/LibraryPanel.svelte";
 import QuestionNavigator from "./sidebar/QuestionNavigator.svelte";
@@ -96,7 +97,7 @@ function incorrectCount(attempt: SubmissionSummary): number {
 </script>
 
 <aside
-  class={`w-full space-y-4 lg:w-full ${
+  class={`relative w-full space-y-4 lg:w-full ${
     isDropActive ? "outline outline-2 outline-primary" : ""
   }`}
   aria-label="Sidebar"
@@ -104,6 +105,20 @@ function incorrectCount(attempt: SubmissionSummary): number {
   on:dragleave={onDragLeave}
   on:drop|preventDefault={onDrop}
 >
+  {#if isDropActive}
+    <div
+      class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+      aria-hidden="true"
+    >
+      <div
+        class="flex items-center gap-2 rounded-lg border border-dashed border-primary bg-primary/10 px-4 py-3 text-sm font-medium text-primary shadow"
+      >
+        <Upload class="h-4 w-4" aria-hidden="true" />
+        <span>Drop to import assessment</span>
+      </div>
+    </div>
+  {/if}
+
   {#if questions.length > 0}
     <QuestionNavigator
       {panelVisibility}
