@@ -56,7 +56,6 @@ let searchTerm = "";
 let comparisonAttemptId: string | null = null;
 let comparisonCandidates: SubmissionSummary[] = [];
 let showDiffHighlight = true;
-let showFeedbackDetails = false;
 let scoreMixSegments: { label: string; value: number; colorClass: string }[] =
   [];
 let subjectivePendingPoints = 0;
@@ -71,7 +70,23 @@ let diffSummary: Record<DiffToken["type"], number> = {
   remove: 0,
   match: 0,
 };
+let wordDiffEligible = false;
 let contextMap = new Map<string, AssessmentContext>();
+
+const wordDiffEligibilityRules: Partial<
+  Record<
+    QuestionResult["question"]["type"],
+    (result: QuestionResult) => boolean
+  >
+> = {
+  subjective: (result) => Boolean(result.correctAnswer?.trim()),
+  fitb: (result) => Boolean(result.correctAnswer?.trim()),
+};
+
+function isWordDiffEligible(result: QuestionResult) {
+  const rule = wordDiffEligibilityRules[result.question.type];
+  return rule ? rule(result) : false;
+}
 
 $: baseSummary = $attempts.get(attemptId) ?? null;
 $: summary = baseSummary
@@ -179,6 +194,7 @@ $: currentContext =
   currentResult?.question.contextId != null
     ? (contextMap.get(currentResult.question.contextId) ?? null)
     : null;
+$: wordDiffEligible = currentResult ? isWordDiffEligible(currentResult) : false;
 $: if (currentResult?.requiresManualGrading) {
   initializeWorkspace(currentResult.question.id, {
     rubrics: currentResult.rubrics,
@@ -230,9 +246,10 @@ $: typeBreakdownRows = summary
       (result) => typeLabels[result.question.type] ?? result.question.type,
     )
   : [];
-$: answerDiffTokens = currentResult
-  ? buildDiffTokens(currentResult.userAnswer, currentResult.correctAnswer)
-  : [];
+$: answerDiffTokens =
+  currentResult && wordDiffEligible
+    ? buildDiffTokens(currentResult.userAnswer, currentResult.correctAnswer)
+    : [];
 $: diffSummary = summarizeDiff(answerDiffTokens);
 
 onMount(() => {
@@ -384,9 +401,9 @@ function applyFeedbackToSummary(
             visibleEntriesLength={visibleEntries.length}
             context={currentContext}
             bind:showDiffHighlight
-            bind:showFeedbackDetails
             answerDiffTokens={answerDiffTokens}
             diffSummary={diffSummary}
+            wordDiffEligible={wordDiffEligible}
           />
         {:else if summary}
           <div class="rounded-lg border bg-card/70 p-6 text-sm text-muted-foreground">
