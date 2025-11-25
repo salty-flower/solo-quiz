@@ -315,7 +315,8 @@ function handleRecentFile(entry: RecentFileEntry) {
   );
 }
 
-function questionNavStyles(question: Question, index: number): string {
+let questionNavStyles: (question: Question, index: number) => string = () => "";
+$: questionNavStyles = (question: Question, index: number): string => {
   if (index === currentIndex) {
     return "border-primary bg-primary/10 text-primary";
   }
@@ -339,12 +340,19 @@ function questionNavStyles(question: Question, index: number): string {
   }
 
   return "border-border";
-}
+};
 
-function questionNavStatus(
+let questionNavStatus: (
   question: Question,
   index: number,
-): { label: string; indicator: string } {
+) => { label: string; indicator: string } = () => ({
+  label: "",
+  indicator: "",
+});
+$: questionNavStatus = (
+  question: Question,
+  index: number,
+): { label: string; indicator: string } => {
   const position = index + 1;
   if (index === currentIndex) {
     return {
@@ -381,7 +389,7 @@ function questionNavStatus(
   }
 
   return { label: `Question ${position} not answered`, indicator: "○" };
-}
+};
 
 /**
  * Moves focus to the requested question card and surfaces an aria-live
