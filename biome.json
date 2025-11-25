@@ -9,6 +9,18 @@
     "indentStyle": "space",
     "indentWidth": 2
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "linter": {
+    "rules": {
+      "complexity": {
+        "useLiteralKeys": "off"
+      }
+    }
+  },
   "overrides": [
     {
       "includes": ["**/*.svelte", "**/*.astro", "**/*.vue"],
@@ -21,16 +33,6 @@
           "correctness": {
             "noUnusedVariables": "off",
             "noUnusedImports": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": ["**/*"],
-      "linter": {
-        "rules": {
-          "complexity": {
-            "useLiteralKeys": "off"
           }
         }
       }

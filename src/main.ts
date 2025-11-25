@@ -1,5 +1,5 @@
 import { mount } from "svelte";
-import "./app.postcss";
+import "./app.css";
 
 if (__BUILD_TARGET__ !== "cdn") {
   await import("katex/dist/katex.min.css");
