@@ -8,6 +8,11 @@ import type { PanelVisibility, PanelKey } from "../../stores/preferences";
 import type { RecentFileEntry } from "../../storage";
 import type { ExampleAssessment } from "../../example-assessments";
 import type { SubmissionSummary } from "../../results";
+import {
+  createAssessmentFingerprint,
+  normalizeFingerprint,
+  fingerprintsMatch,
+} from "../../utils/assessment-fingerprint";
 
 const formatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "short",
@@ -28,7 +33,10 @@ export let onReview: (attemptId: string) => void;
 export let onRetakeIncorrect: (attempt: SubmissionSummary) => void;
 export let deleteRecentHistory: (names: string[]) => Promise<void> | void;
 export let deleteAttempt: (attemptId: string) => Promise<void> | void;
-export let deleteAttemptsByTitle: (title: string) => Promise<void> | void;
+export let deleteAttemptsByFingerprint: (
+  fingerprint: ReturnType<typeof normalizeFingerprint>,
+  title: string,
+) => Promise<void> | void;
 export let currentAssessmentTitle: string | null = null;
 export let questions: Question[] = [];
 export let questionNavStyles: (question: Question, index: number) => string;
@@ -46,27 +54,42 @@ let isDropActive = false;
 let recentWithAttempts: {
   file: RecentFileEntry;
   title: string;
+  fingerprint: ReturnType<typeof normalizeFingerprint>;
   attempts: SubmissionSummary[];
 }[] = [];
 let orphanedAttempts: SubmissionSummary[] = [];
 
 $: {
-  const grouped = new Map<string, SubmissionSummary[]>();
-  for (const attempt of attempts) {
-    const title = attempt.assessment.meta.title;
-    const list = grouped.get(title) ?? [];
-    list.push(attempt);
-    grouped.set(title, list);
-  }
+  const attemptFingerprints = attempts.map((attempt) => ({
+    attempt,
+    fingerprint: createAssessmentFingerprint(attempt.assessment),
+  }));
 
   recentWithAttempts = recentFiles.map((file) => {
     const title = file.meta?.title ?? file.name;
-    return { file, title, attempts: grouped.get(title) ?? [] };
+    const fingerprint = normalizeFingerprint(file.meta);
+    const matches = attemptFingerprints.filter(
+      ({ fingerprint: attemptFingerprint }) =>
+        fingerprint
+          ? fingerprintsMatch(attemptFingerprint, fingerprint)
+          : attemptFingerprint.title === title,
+    );
+
+    return {
+      file,
+      title,
+      fingerprint,
+      attempts: matches.map(({ attempt }) => attempt),
+    };
   });
 
-  const recentTitles = new Set(recentWithAttempts.map((entry) => entry.title));
+  const linkedAttemptIds = new Set(
+    recentWithAttempts.flatMap((entry) =>
+      entry.attempts.map((attempt) => attempt.id),
+    ),
+  );
   orphanedAttempts = attempts.filter(
-    (attempt) => !recentTitles.has(attempt.assessment.meta.title),
+    (attempt) => !linkedAttemptIds.has(attempt.id),
   );
 }
 
@@ -156,6 +179,6 @@ function incorrectCount(attempt: SubmissionSummary): number {
     {formatter}
     {incorrectCount}
     {deleteAttempt}
-    {deleteAttemptsByTitle}
+    deleteAttemptsByFingerprint={deleteAttemptsByFingerprint}
   />
 </aside>

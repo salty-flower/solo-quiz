@@ -20,10 +20,13 @@ import Separator from "../../ui/Separator.svelte";
 import type { SubmissionSummary } from "../../../results";
 import type { PanelKey, PanelVisibility } from "../../../stores/preferences";
 import type { RecentFileEntry } from "../../../storage";
+import { fingerprintKey } from "../../../utils/assessment-fingerprint";
+import type { AssessmentFingerprint } from "../../../utils/assessment-fingerprint";
 
 type RecentWithAttempts = {
   file: RecentFileEntry;
   title: string;
+  fingerprint: AssessmentFingerprint | null;
   attempts: SubmissionSummary[];
 };
 
@@ -42,7 +45,10 @@ export let formatter: Intl.DateTimeFormat;
 export let incorrectCount: (attempt: SubmissionSummary) => number;
 export let deleteRecentHistory: (names: string[]) => Promise<void> | void;
 export let deleteAttempt: (attemptId: string) => Promise<void> | void;
-export let deleteAttemptsByTitle: (title: string) => Promise<void> | void;
+export let deleteAttemptsByFingerprint: (
+  fingerprint: AssessmentFingerprint | null,
+  title: string,
+) => Promise<void> | void;
 
 $: deleteAllLabel = recentWithAttempts.some(
   (entry) => entry.attempts.length === 0,
@@ -53,7 +59,7 @@ $: deleteAllLabel = recentWithAttempts.some(
 async function deleteRecent(entry: RecentWithAttempts) {
   await deleteRecentHistory([entry.file.name]);
   if (entry.attempts.length > 0) {
-    await deleteAttemptsByTitle(entry.title);
+    await deleteAttemptsByFingerprint(entry.fingerprint, entry.title);
   }
 }
 
@@ -69,8 +75,27 @@ async function deleteAllRecentFiles() {
   }
 
   await deleteRecentHistory(recentWithAttempts.map((entry) => entry.file.name));
-  const titles = new Set(recentWithAttempts.map((entry) => entry.title));
-  await Promise.all([...titles].map((title) => deleteAttemptsByTitle(title)));
+  const uniqueAttempts = new Map<
+    string,
+    { fingerprint: AssessmentFingerprint | null; title: string }
+  >();
+  for (const entry of recentWithAttempts) {
+    const key =
+      entry.fingerprint !== null
+        ? fingerprintKey(entry.fingerprint)
+        : `title::${entry.title}`;
+    if (!uniqueAttempts.has(key)) {
+      uniqueAttempts.set(key, {
+        fingerprint: entry.fingerprint,
+        title: entry.title,
+      });
+    }
+  }
+  await Promise.all(
+    [...uniqueAttempts.values()].map((entry) =>
+      deleteAttemptsByFingerprint(entry.fingerprint, entry.title),
+    ),
+  );
 }
 </script>
 

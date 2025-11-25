@@ -7,6 +7,8 @@ import {
   safeLocalStorageRemove,
   safeLocalStorageSet,
 } from "./utils/persistence";
+import type { AssessmentFingerprint } from "./utils/assessment-fingerprint";
+import { isAssessmentFingerprint } from "./utils/assessment-fingerprint";
 
 const { recentsDbName, recentsStore, recentsLocal } = STORAGE_KEYS;
 
@@ -24,6 +26,7 @@ export interface RecentFileEntry {
 export interface RecentFileMeta {
   title?: string;
   questionCount?: number;
+  fingerprint?: AssessmentFingerprint | null;
 }
 
 interface SoloQuizDB extends DBSchema {
@@ -88,7 +91,11 @@ function isRecentEntry(value: unknown): value is RecentFileEntry {
         ((value as RecentFileEntry).meta?.title === undefined ||
           typeof (value as RecentFileEntry).meta?.title === "string") &&
         ((value as RecentFileEntry).meta?.questionCount === undefined ||
-          typeof (value as RecentFileEntry).meta?.questionCount === "number")))
+          typeof (value as RecentFileEntry).meta?.questionCount === "number") &&
+        ((value as RecentFileEntry).meta?.fingerprint === undefined ||
+          isAssessmentFingerprint(
+            (value as RecentFileEntry).meta?.fingerprint,
+          ))))
   );
 }
 

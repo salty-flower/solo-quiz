@@ -15,6 +15,7 @@ import {
 import { TIMER_INTERVAL_MS } from "../constants";
 import { registerAttempt } from "./attempts";
 import { getReviewPath, navigate } from "./router";
+import { createAssessmentFingerprint } from "../utils/assessment-fingerprint";
 
 function shuffle<T>(array: T[]): T[] {
   const copy = [...array];
@@ -186,6 +187,7 @@ function createQuizStore() {
       const meta = {
         title: data.meta.title,
         questionCount: data.questions.length,
+        fingerprint: createAssessmentFingerprint(data),
       };
       await touchRecentFile(source.name, source.content, meta);
       await refreshRecentFiles();
