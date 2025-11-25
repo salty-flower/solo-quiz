@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "rollup-vite": "cross-env node_modules/vite/bin/vite.js",
     "rolldown-vite": "cross-env node_modules/rolldown-vite/bin/vite.js",
     "dev": "rolldown-vite",
     "build:standalone": "cross-env BUILD_TARGET=inline pnpm run rolldown-vite build",
