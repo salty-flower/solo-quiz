@@ -23,9 +23,9 @@ export let activeIndex: number;
 export let visiblePosition: number;
 export let visibleEntriesLength: number;
 export let showDiffHighlight: boolean;
-export let showFeedbackDetails: boolean;
 export let answerDiffTokens: DiffToken[];
 export let diffSummary: Record<DiffToken["type"], number>;
+export let wordDiffEligible: boolean;
 export let context: AssessmentContext | null = null;
 
 let meta: ReturnType<typeof statusMeta>;
@@ -81,21 +81,6 @@ $: subjectiveResult = currentResult.requiresManualGrading
         <p class={`text-lg font-semibold ${meta.textClass}`}>{meta.label}</p>
       </div>
     </div>
-    <div class="grid gap-4 md:grid-cols-2">
-      <div class="rounded-md border bg-card/60 p-4">
-        <p class="text-xs uppercase text-muted-foreground">Your answer</p>
-        <div class="mt-2 text-sm font-medium text-foreground">
-          {@html renderWithKatex(currentResult.userAnswer || "—")}
-        </div>
-      </div>
-      <div class="rounded-md border bg-card/60 p-4">
-        <p class="text-xs uppercase text-muted-foreground">Reference answer</p>
-        <div class="mt-2 text-sm font-medium text-foreground">
-          {@html renderWithKatex(currentResult.correctAnswer || "—")}
-        </div>
-      </div>
-    </div>
-
     {#if currentResult.question.type === "single" || currentResult.question.type === "multi"}
       {@const optionQuestion = currentResult.question}
       {@const selectedOptions = new Set(currentResult.selectedOptions ?? [])}
@@ -153,10 +138,16 @@ $: subjectiveResult = currentResult.requiresManualGrading
       referenceAnswer={currentResult.correctAnswer}
       tokens={answerDiffTokens}
       bind:showDiffHighlight
-      showFeedbackDetails={showFeedbackDetails}
       diffSummary={diffSummary}
-      feedback={currentResult.feedback}
+      wordDiffEligible={wordDiffEligible}
     />
+
+    <div class="rounded-md border bg-card/60 p-4 text-sm leading-relaxed">
+      <p class="text-xs uppercase text-muted-foreground">Reference explanation</p>
+      <div class="mt-2 text-muted-foreground">
+        {@html renderWithKatex(currentResult.feedback ?? "No explanation was provided for this question.")}
+      </div>
+    </div>
 
     {#if subjectiveResult}
       <LlmWorkspaceSection result={subjectiveResult} />
