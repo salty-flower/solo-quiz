@@ -1,5 +1,6 @@
 <script lang="ts">
 import { Eye, EyeOff } from "lucide-svelte";
+import { slide } from "svelte/transition";
 import Button from "../../ui/Button.svelte";
 import {
   Card,
@@ -51,26 +52,28 @@ export let navigateTo: (index: number) => void | Promise<void>;
     <CardDescription>Jump to any question.</CardDescription>
   </CardHeader>
   {#if !panelVisibility.questions}
-    <CardContent>
-      <nav class="grid grid-cols-5 gap-2 text-sm md:grid-cols-4 lg:grid-cols-3">
-        {#each questions as question, index}
-          {@const status = questionNavStatus(question, index)}
-          <button
-            type="button"
-            class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${questionNavStyles(
-              question,
-              index,
-            )}`}
-            on:click={() => navigateTo(index)}
-            aria-label={status.label}
-            title={status.label}
-          >
-            <span aria-hidden="true" class="mr-1 text-xs">{status.indicator}</span>
-            <span aria-hidden="true">{index + 1}</span>
-            <span class="sr-only">{status.label}</span>
-          </button>
-        {/each}
-      </nav>
-    </CardContent>
+    <div transition:slide={{ duration: 200 }}>
+      <CardContent>
+        <nav class="grid grid-cols-5 gap-2 text-sm md:grid-cols-4 lg:grid-cols-3">
+          {#each questions as question, index}
+            {@const status = questionNavStatus(question, index)}
+            <button
+              type="button"
+              class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${questionNavStyles(
+                question,
+                index,
+              )}`}
+              on:click={() => navigateTo(index)}
+              aria-label={status.label}
+              title={status.label}
+            >
+              <span aria-hidden="true" class="mr-1 text-xs">{status.indicator}</span>
+              <span aria-hidden="true">{index + 1}</span>
+              <span class="sr-only">{status.label}</span>
+            </button>
+          {/each}
+        </nav>
+      </CardContent>
+    </div>
   {/if}
 </Card>

@@ -87,6 +87,7 @@ const panelVisibility = preferences.panelVisibility;
 const sidebarVisible = preferences.sidebarVisible;
 const { togglePanel, toggleSidebar, cycleTheme } = preferences;
 let contextMap = new Map<string, AssessmentContext>();
+let lastPanelAutoKey: string | null = null;
 const {
   assessment: assessmentStore,
   questions: questionsStore,
@@ -181,6 +182,23 @@ $: questionContext =
   currentQuestion?.contextId != null
     ? (contextMap.get(currentQuestion.contextId) ?? null)
     : null;
+$: {
+  if (!assessment || questions.length === 0) {
+    lastPanelAutoKey = null;
+  } else {
+    const key = `${assessment.meta.title}::${questions
+      .map((question) => question.id)
+      .join("|")}`;
+    if (key !== lastPanelAutoKey) {
+      panelVisibility.set({
+        assessment: true,
+        recents: true,
+        questions: false,
+      });
+      lastPanelAutoKey = key;
+    }
+  }
+}
 
 const formatTime = formatCountdown;
 

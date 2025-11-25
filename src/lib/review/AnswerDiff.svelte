@@ -1,4 +1,5 @@
 <script lang="ts">
+import { fade } from "svelte/transition";
 import { renderWithKatex } from "../katex";
 import type { DiffToken } from "./diff";
 import { diffClass } from "./diff";
@@ -41,7 +42,7 @@ let showFormattedAnswers = false;
     <div class="space-y-2 rounded-md border bg-background/80 p-3 leading-relaxed">
       <p class="text-xs uppercase text-muted-foreground">Your answer</p>
       {#if wordDiffEligible && showDiffHighlight && !showFormattedAnswers}
-        <div class="flex flex-wrap gap-1 text-sm">
+        <div class="flex flex-wrap gap-1 text-sm" transition:fade={{ duration: 150 }}>
           {#each tokens as token, tokenIndex}
             <span class={`rounded px-1 ${diffClass(token, "user")}`}>
               {token.text}
@@ -52,7 +53,7 @@ let showFormattedAnswers = false;
           {/each}
         </div>
       {:else}
-        <div class="text-sm text-foreground">
+        <div class="text-sm text-foreground" transition:fade={{ duration: 150 }}>
           {@html renderWithKatex(userAnswer || "—")}
         </div>
       {/if}
@@ -60,7 +61,7 @@ let showFormattedAnswers = false;
     <div class="space-y-2 rounded-md border bg-background/80 p-3 leading-relaxed">
       <p class="text-xs uppercase text-muted-foreground">Reference answer</p>
       {#if wordDiffEligible && showDiffHighlight && !showFormattedAnswers}
-        <div class="flex flex-wrap gap-1 text-sm">
+        <div class="flex flex-wrap gap-1 text-sm" transition:fade={{ duration: 150 }}>
           {#each tokens as token, tokenIndex}
             <span class={`rounded px-1 ${diffClass(token, "reference")}`}>
               {token.text}
@@ -71,14 +72,17 @@ let showFormattedAnswers = false;
           {/each}
         </div>
       {:else}
-        <div class="text-sm text-foreground">
+        <div class="text-sm text-foreground" transition:fade={{ duration: 150 }}>
           {@html renderWithKatex(referenceAnswer || "—")}
         </div>
       {/if}
     </div>
   </div>
   {#if wordDiffEligible && !showFormattedAnswers}
-    <div class="flex flex-wrap gap-3 text-[0.75rem] text-muted-foreground">
+    <div
+      class="flex flex-wrap gap-3 text-[0.75rem] text-muted-foreground"
+      transition:fade={{ duration: 150 }}
+    >
       <span class="rounded-full bg-muted/70 px-2 py-1 font-medium text-foreground">
         Matches: {diffSummary.match}
       </span>
@@ -90,11 +94,11 @@ let showFormattedAnswers = false;
       </span>
     </div>
   {:else if wordDiffEligible}
-    <p class="text-xs text-muted-foreground">
+    <p class="text-xs text-muted-foreground" transition:fade={{ duration: 150 }}>
       Word-level highlighting is hidden while rendering Markdown/LaTeX. Toggle back to view the diff summary.
     </p>
   {:else}
-    <p class="text-xs text-muted-foreground">
+    <p class="text-xs text-muted-foreground" transition:fade={{ duration: 150 }}>
       Word-by-word highlighting is available when a reference answer exists for eligible question types.
     </p>
   {/if}

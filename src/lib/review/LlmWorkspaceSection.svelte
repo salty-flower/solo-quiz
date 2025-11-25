@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onDestroy } from "svelte";
+import { slide } from "svelte/transition";
 import Button from "../components/ui/Button.svelte";
 import Separator from "../components/ui/Separator.svelte";
 import { buildSubjectivePrompt } from "../llm";
@@ -52,7 +53,7 @@ $: feedbackError = $errors[questionId];
 $: feedback = $results[questionId];
 $: workspace = $workspaces[questionId];
 $: workspaceError = $workspaceErrors[questionId];
-$: isWorkspaceCollapsed = $workspaceVisibility[questionId] ?? false;
+$: isWorkspaceCollapsed = $workspaceVisibility[questionId] ?? true;
 
 function setFeedbackInput(value: string) {
   setInput(questionId, value);
@@ -218,11 +219,14 @@ onDestroy(() => {
         </div>
       </div>
       {#if isWorkspaceCollapsed}
-        <p class="text-xs text-muted-foreground">
+        <p
+          class="text-xs text-muted-foreground"
+          transition:slide={{ duration: 200 }}
+        >
           Workspace hidden. Use "Show workspace" to edit rubric sliders or narrative feedback.
         </p>
       {:else}
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-3 md:grid-cols-2" transition:slide={{ duration: 200 }}>
           <div class="space-y-2 rounded-md border bg-muted/20 p-3">
             <p class="text-xs uppercase text-muted-foreground">Verdict</p>
             <div class="flex flex-wrap gap-2">

@@ -1,5 +1,6 @@
 <script lang="ts">
 import { ClipboardPaste, Download, Eye, EyeOff, Upload } from "lucide-svelte";
+import { slide } from "svelte/transition";
 import Button from "../../ui/Button.svelte";
 import {
   Card,
@@ -65,71 +66,73 @@ function onFileInputChange(event: Event) {
     </CardDescription>
   </CardHeader>
   {#if !panelVisibility.assessment}
-    <CardContent className="space-y-4">
-      <div class="flex items-start gap-3">
-        <div class="flex items-center gap-2">
-          <Button
-            size="icon"
-            variant="secondary"
-            class="shrink-0"
-            title="Import assessment from file"
-            on:click={() => fileInput?.click()}
-          >
-            <Upload class="h-4 w-4" aria-hidden="true" />
-            <span class="sr-only">Import assessment from file</span>
-          </Button>
-          {#if clipboardSupported}
+    <div transition:slide={{ duration: 200 }}>
+      <CardContent className="space-y-4">
+        <div class="flex items-start gap-3">
+          <div class="flex items-center gap-2">
             <Button
               size="icon"
               variant="secondary"
               class="shrink-0"
-              title="Import assessment from clipboard"
-              on:click={() => void importFromClipboard?.()}
+              title="Import assessment from file"
+              on:click={() => fileInput?.click()}
             >
-              <ClipboardPaste class="h-4 w-4" aria-hidden="true" />
-              <span class="sr-only">Import assessment from clipboard</span>
+              <Upload class="h-4 w-4" aria-hidden="true" />
+              <span class="sr-only">Import assessment from file</span>
             </Button>
-          {/if}
-        </div>
-        <p class="text-xs text-muted-foreground">
-          Drag and drop a JSON file anywhere on this sidebar.
-        </p>
-        <input
-          class="hidden"
-          type="file"
-          accept="application/json"
-          bind:this={fileInput}
-          on:change={onFileInputChange}
-        />
-      </div>
-      <Separator />
-      <label class="flex items-center justify-between text-sm">
-        <span>Require all answers before submit</span>
-        <Switch
-          checked={requireAllAnsweredChecked}
-          label="Require all answers"
-          on:change={(event) => setRequireAllAnswered(event.detail)}
-        />
-      </label>
-      <Separator />
-      <div class="space-y-2">
-        <p class="text-sm font-medium">Example assessments</p>
-        {#each exampleAssessments as example}
-          <div class="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
-            <p class="font-medium">{example.data.meta.title}</p>
-            <Button
-              size="icon"
-              variant="outline"
-              class="ml-auto"
-              title={`Download ${example.data.meta.title}`}
-              on:click={() => downloadExampleAssessment(example.id)}
-            >
-              <Download class="h-4 w-4" aria-hidden="true" />
-              <span class="sr-only">Download {example.data.meta.title}</span>
-            </Button>
+            {#if clipboardSupported}
+              <Button
+                size="icon"
+                variant="secondary"
+                class="shrink-0"
+                title="Import assessment from clipboard"
+                on:click={() => void importFromClipboard?.()}
+              >
+                <ClipboardPaste class="h-4 w-4" aria-hidden="true" />
+                <span class="sr-only">Import assessment from clipboard</span>
+              </Button>
+            {/if}
           </div>
-        {/each}
-      </div>
-    </CardContent>
+          <p class="text-xs text-muted-foreground">
+            Drag and drop a JSON file anywhere on this sidebar.
+          </p>
+          <input
+            class="hidden"
+            type="file"
+            accept="application/json"
+            bind:this={fileInput}
+            on:change={onFileInputChange}
+          />
+        </div>
+        <Separator />
+        <label class="flex items-center justify-between text-sm">
+          <span>Require all answers before submit</span>
+          <Switch
+            checked={requireAllAnsweredChecked}
+            label="Require all answers"
+            on:change={(event) => setRequireAllAnswered(event.detail)}
+          />
+        </label>
+        <Separator />
+        <div class="space-y-2">
+          <p class="text-sm font-medium">Example assessments</p>
+          {#each exampleAssessments as example}
+            <div class="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
+              <p class="font-medium">{example.data.meta.title}</p>
+              <Button
+                size="icon"
+                variant="outline"
+                class="ml-auto"
+                title={`Download ${example.data.meta.title}`}
+                on:click={() => downloadExampleAssessment(example.id)}
+              >
+                <Download class="h-4 w-4" aria-hidden="true" />
+                <span class="sr-only">Download {example.data.meta.title}</span>
+              </Button>
+            </div>
+          {/each}
+        </div>
+      </CardContent>
+    </div>
   {/if}
 </Card>

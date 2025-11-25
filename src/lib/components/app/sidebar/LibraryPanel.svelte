@@ -8,6 +8,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-svelte";
+import { slide } from "svelte/transition";
 import Button from "../../ui/Button.svelte";
 import {
   Card,
@@ -126,7 +127,8 @@ async function deleteAllRecentFiles() {
     </CardDescription>
   </CardHeader>
   {#if !panelVisibility.recents}
-    <CardContent className="space-y-4">
+    <div transition:slide={{ duration: 200 }}>
+      <CardContent className="space-y-4">
       <div class="space-y-2">
         <div class="flex items-center justify-between gap-2">
           <p class="flex items-center gap-2 text-sm font-medium">
@@ -328,6 +330,7 @@ async function deleteAllRecentFiles() {
           </ul>
         </div>
       {/if}
-    </CardContent>
+      </CardContent>
+    </div>
   {/if}
 </Card>
