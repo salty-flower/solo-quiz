@@ -17,7 +17,7 @@ export let theme: Theme = "light";
 export let cycleTheme: () => void;
 </script>
 
-<header class="border-b bg-card/30 backdrop-blur">
+<header class="border-b bg-card/30 backdrop-blur-sm">
   <div class="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <h1 class="text-2xl font-semibold">Solo Quiz Player</h1>

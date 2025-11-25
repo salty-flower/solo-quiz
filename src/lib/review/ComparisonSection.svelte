@@ -27,7 +27,7 @@ function openComparison() {
 </script>
 
 <section class="mx-auto w-full max-w-6xl space-y-4 px-4 py-6">
-  <div class="rounded-lg border bg-card/70 p-4 shadow-sm">
+  <div class="rounded-lg border bg-card/70 p-4 shadow-xs">
     <div class="flex flex-wrap items-center gap-3">
       <div>
         <p class="text-xs uppercase text-muted-foreground">Attempt history</p>
@@ -38,7 +38,7 @@ function openComparison() {
       {#if comparisonCandidates.length > 0}
         <div class="ml-auto flex flex-wrap items-center gap-2">
           <select
-            class="rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            class="rounded-md border border-input bg-background px-2 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
             bind:value={comparisonAttemptId}
             aria-label="Choose attempt to compare"
             on:change={handleSelect}

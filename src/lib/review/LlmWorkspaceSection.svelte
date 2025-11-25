@@ -252,7 +252,7 @@ onDestroy(() => {
                 min="0"
                 max={workspace.maxScore}
                 step="0.25"
-                class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                 value={workspace.score}
                 on:input={(event) =>
                   setWorkspaceScoreValue(
@@ -299,7 +299,7 @@ onDestroy(() => {
                   )}
               />
               <textarea
-                class="h-20 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                class="h-20 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                 placeholder="Comments for this rubric"
                 value={rubric.comments}
                 on:input={(event) =>
@@ -320,7 +320,7 @@ onDestroy(() => {
           </label>
           <textarea
             id={summaryFieldId}
-            class="h-28 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            class="h-28 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
             placeholder="Summarize the score justification"
             value={workspace.feedback}
             on:input={(event) =>
@@ -347,7 +347,7 @@ onDestroy(() => {
             {#each workspace.improvements as improvement, improvementIndex}
               <div class="flex gap-2">
                 <input
-                  class="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  class="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                   placeholder={`Suggestion ${improvementIndex + 1}`}
                   value={improvement}
                   on:input={(event) =>
@@ -392,7 +392,7 @@ onDestroy(() => {
       Paste LLM feedback JSON
     </p>
     <textarea
-      class="h-32 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-[0.8rem] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      class="h-32 w-full resize-y rounded-md border border-input bg-background px-2 py-1 text-[0.8rem] shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
       placeholder="Paste the model's JSON response here"
       value={feedbackInput}
       on:input={(event) => setFeedbackInput((event.target as HTMLTextAreaElement).value)}

@@ -68,7 +68,7 @@ function updateSearch(event: Event) {
           Search & sort
         </label>
         <input
-          class="w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          class="w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
           placeholder="Search text, tags, or answers"
           id={searchInputId}
           value={searchTerm}
@@ -76,7 +76,7 @@ function updateSearch(event: Event) {
           aria-label="Search results"
         />
         <select
-          class="w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          class="w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
           value={sortMode}
           on:change={updateSort}
           aria-label="Sort results"

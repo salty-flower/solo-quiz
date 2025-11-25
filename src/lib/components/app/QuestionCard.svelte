@@ -82,7 +82,7 @@ function resetOrdering(question: OrderingQuestion) {
   </CardHeader>
   <CardContent>
     <div
-      class="space-y-4 focus:outline-none"
+      class="space-y-4 focus:outline-hidden"
       tabindex="-1"
       bind:this={questionElement}
       aria-live="polite"
@@ -156,7 +156,7 @@ function resetOrdering(question: OrderingQuestion) {
         {/each}
       {:else if question.type === "fitb"}
         <textarea
-          class="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           placeholder="Type your answer"
           value={answers[question.id] as string}
           on:input={(event) => updateTouched(question, (event.target as HTMLTextAreaElement).value)}
@@ -165,7 +165,7 @@ function resetOrdering(question: OrderingQuestion) {
         {@const subjectiveQuestion = question as SubjectiveQuestion}
         <div class="space-y-3">
           <textarea
-            class="min-h-[160px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            class="min-h-[160px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             placeholder="Write your response"
             value={answers[question.id] as string}
             on:input={(event) => updateTouched(question, (event.target as HTMLTextAreaElement).value)}
@@ -194,7 +194,7 @@ function resetOrdering(question: OrderingQuestion) {
         <input
           type="number"
           inputmode="decimal"
-          class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           placeholder="Enter a number"
           value={answers[question.id] as string}
           on:input={(event) => updateTouched(question, (event.target as HTMLInputElement).value)}

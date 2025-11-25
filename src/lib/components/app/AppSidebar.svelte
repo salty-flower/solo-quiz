@@ -98,7 +98,7 @@ function incorrectCount(attempt: SubmissionSummary): number {
 
 <aside
   class={`relative w-full space-y-4 lg:w-full ${
-    isDropActive ? "outline outline-2 outline-primary" : ""
+    isDropActive ? "outline-solid outline-2 outline-primary" : ""
   }`}
   aria-label="Sidebar"
   on:dragover|preventDefault={onDragOver}
@@ -107,11 +107,11 @@ function incorrectCount(attempt: SubmissionSummary): number {
 >
   {#if isDropActive}
     <div
-      class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+      class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-xs"
       aria-hidden="true"
     >
       <div
-        class="flex items-center gap-2 rounded-lg border border-dashed border-primary bg-primary/10 px-4 py-3 text-sm font-medium text-primary shadow"
+        class="flex items-center gap-2 rounded-lg border border-dashed border-primary bg-primary/10 px-4 py-3 text-sm font-medium text-primary shadow-sm"
       >
         <Upload class="h-4 w-4" aria-hidden="true" />
         <span>Drop to import assessment</span>

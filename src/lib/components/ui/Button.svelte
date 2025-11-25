@@ -5,7 +5,7 @@ import type { HTMLButtonAttributes } from "svelte/elements";
 export let type: HTMLButtonAttributes["type"] = "button";
 export let variant:
   | "default"
-  | "outline"
+  | "outline-solid"
   | "ghost"
   | "secondary"
   | "destructive" = "default";
@@ -20,7 +20,7 @@ function handleClick(event: MouseEvent) {
 }
 
 const base =
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ring-offset-background";
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ring-offset-background";
 
 const variants: Record<typeof variant, string> = {
   default: "bg-primary text-primary-foreground hover:bg-primary/90",

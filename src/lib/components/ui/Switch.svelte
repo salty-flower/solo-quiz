@@ -23,7 +23,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 <button
   type="button"
-  class={`inline-flex h-6 w-11 items-center rounded-full border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 ${
+  class={`inline-flex h-6 w-11 items-center rounded-full border border-transparent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 ${
     checked ? "bg-primary" : "bg-muted"
   }`}
   role="switch"

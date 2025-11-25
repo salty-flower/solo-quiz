@@ -15,7 +15,7 @@ export let typeBreakdownRows: BreakdownRow[];
 
 <section class="mx-auto w-full max-w-6xl space-y-4 px-4 py-6">
   <div class="grid gap-4 lg:grid-cols-3">
-    <div class="rounded-lg border bg-card/70 p-4 shadow-sm">
+    <div class="rounded-lg border bg-card/70 p-4 shadow-xs">
       <p class="text-xs uppercase text-muted-foreground">Score mix</p>
       <p class="text-sm text-muted-foreground">
         Balance between deterministic scoring and subjective reviews.
@@ -29,7 +29,7 @@ export let typeBreakdownRows: BreakdownRow[];
         />
       </div>
     </div>
-    <div class="rounded-lg border bg-card/70 p-4 shadow-sm">
+    <div class="rounded-lg border bg-card/70 p-4 shadow-xs">
       <p class="text-xs uppercase text-muted-foreground">Tag coverage</p>
       <p class="text-sm text-muted-foreground">
         Which tags saw correct, incorrect, or pending outcomes.
@@ -51,7 +51,7 @@ export let typeBreakdownRows: BreakdownRow[];
         </p>
       {/if}
     </div>
-    <div class="rounded-lg border bg-card/70 p-4 shadow-sm">
+    <div class="rounded-lg border bg-card/70 p-4 shadow-xs">
       <p class="text-xs uppercase text-muted-foreground">Question types</p>
       <p class="text-sm text-muted-foreground">
         How each format performed across the attempt.
