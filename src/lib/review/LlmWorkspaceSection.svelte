@@ -53,7 +53,7 @@ $: feedbackError = $errors[questionId];
 $: feedback = $results[questionId];
 $: workspace = $workspaces[questionId];
 $: workspaceError = $workspaceErrors[questionId];
-$: isWorkspaceCollapsed = $workspaceVisibility[questionId] ?? false;
+$: isWorkspaceCollapsed = $workspaceVisibility[questionId] ?? true;
 
 function setFeedbackInput(value: string) {
   setInput(questionId, value);
