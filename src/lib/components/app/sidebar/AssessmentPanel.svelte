@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Download, Eye, EyeOff, Upload } from "lucide-svelte";
+import { ClipboardPaste, Download, Eye, EyeOff, Upload } from "lucide-svelte";
 import Button from "../../ui/Button.svelte";
 import {
   Card,
@@ -20,6 +20,8 @@ export let setRequireAllAnswered: (value: boolean) => void;
 export let exampleAssessments: ExampleAssessment[] = [];
 export let downloadExampleAssessment: (id: string) => void;
 export let handleFile: (file: File) => Promise<void> | void;
+export let clipboardSupported = false;
+export let importFromClipboard: () => Promise<void> | void;
 
 let fileInput: HTMLInputElement | null = null;
 
@@ -59,24 +61,38 @@ function onFileInputChange(event: Event) {
       </Button>
     </div>
     <CardDescription>
-      Select a JSON assessment or drop a file anywhere on the sidebar to begin.
+      Load a JSON assessment from a file or your clipboard.
     </CardDescription>
   </CardHeader>
   {#if !panelVisibility.assessment}
     <CardContent className="space-y-4">
       <div class="flex items-start gap-3">
-        <Button
-          size="sm"
-          variant="secondary"
-          class="shrink-0"
-          title="Choose file"
-          on:click={() => fileInput?.click()}
-        >
-          <Upload class="mr-2 h-4 w-4" aria-hidden="true" />
-          Import JSON
-        </Button>
+        <div class="flex items-center gap-2">
+          <Button
+            size="icon"
+            variant="secondary"
+            class="shrink-0"
+            title="Import assessment from file"
+            on:click={() => fileInput?.click()}
+          >
+            <Upload class="h-4 w-4" aria-hidden="true" />
+            <span class="sr-only">Import assessment from file</span>
+          </Button>
+          {#if clipboardSupported}
+            <Button
+              size="icon"
+              variant="secondary"
+              class="shrink-0"
+              title="Import assessment from clipboard"
+              on:click={() => void importFromClipboard?.()}
+            >
+              <ClipboardPaste class="h-4 w-4" aria-hidden="true" />
+              <span class="sr-only">Import assessment from clipboard</span>
+            </Button>
+          {/if}
+        </div>
         <p class="text-xs text-muted-foreground">
-          You can also drag and drop an assessment file anywhere on this sidebar.
+          Drag and drop a JSON file anywhere on this sidebar.
         </p>
         <input
           class="hidden"

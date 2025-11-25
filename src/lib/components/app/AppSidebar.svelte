@@ -38,6 +38,8 @@ export let questionNavStatus: (
 export let navigateTo: (index: number) => void | Promise<void>;
 export let downloadExampleAssessment: (id: string) => void;
 export let handleFile: (file: File) => Promise<void> | void;
+export let clipboardSupported = false;
+export let importFromClipboard: () => Promise<void> | void;
 
 let isDropActive = false;
 let recentWithAttempts: {
@@ -121,6 +123,8 @@ function incorrectCount(attempt: SubmissionSummary): number {
     {exampleAssessments}
     {downloadExampleAssessment}
     {handleFile}
+    {clipboardSupported}
+    {importFromClipboard}
   />
 
   <LibraryPanel

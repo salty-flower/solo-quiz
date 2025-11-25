@@ -80,6 +80,8 @@ let navigationAnnouncement = "";
 let confirmReplacementOpen = false;
 let pendingImportLabel = "";
 let pendingImportAction: (() => void | Promise<void>) | null = null;
+let clipboardSupported = false;
+let clipboardAutoAttempted = false;
 const theme = preferences.theme;
 const panelVisibility = preferences.panelVisibility;
 const sidebarVisible = preferences.sidebarVisible;
@@ -107,6 +109,7 @@ const {
   submitDisabled,
   refreshRecentFiles,
   handleFile: handleFileFromStore,
+  handleClipboardContent: handleClipboardContentFromStore,
   loadRecentAssessment: loadRecentAssessmentFromStore,
   updateTouched,
   setOrderingTouched,
@@ -122,7 +125,10 @@ const { reset: resetLlmState } = llm;
 const exampleAssessments = getExampleAssessments();
 
 onMount(() => {
+  clipboardSupported =
+    typeof navigator !== "undefined" && Boolean(navigator.clipboard?.readText);
   void refreshRecentFiles();
+  void maybeAutoImportFromClipboard();
 
   const handleBeforeUnload = (event: BeforeUnloadEvent) => {
     if (!assessmentInProgress()) return;
@@ -251,8 +257,55 @@ function onWindowDrop(event: DragEvent) {
   }
 }
 
+async function importClipboardAssessment(options?: { silent?: boolean }) {
+  if (!clipboardSupported) {
+    if (!options?.silent) {
+      parseErrorsStore.set([
+        { path: "clipboard", message: "Clipboard import is not supported." },
+      ]);
+    }
+    return;
+  }
+
+  try {
+    const content = (await navigator.clipboard.readText()).trim();
+    if (!content) {
+      if (!options?.silent) {
+        parseErrorsStore.set([
+          { path: "clipboard", message: "Clipboard is empty." },
+        ]);
+      }
+      return;
+    }
+    requestAssessmentReplacement(
+      () => void handleClipboardContentFromStore(content),
+      "clipboard assessment",
+    );
+  } catch (error) {
+    if (!options?.silent) {
+      parseErrorsStore.set([
+        { path: "clipboard", message: (error as Error).message },
+      ]);
+    }
+  }
+}
+
+async function maybeAutoImportFromClipboard() {
+  if (clipboardAutoAttempted || assessment || assessmentInProgress()) return;
+  clipboardAutoAttempted = true;
+  if (!clipboardSupported) return;
+
+  const permissionStatus = await navigator.permissions
+    ?.query?.({ name: "clipboard-read" as PermissionName })
+    .catch(() => null);
+
+  if (permissionStatus && permissionStatus.state !== "granted") return;
+
+  await importClipboardAssessment({ silent: true });
+}
+
 function handleIncomingFile(file: File) {
-  requestAssessmentReplacement(() => handleFileFromStore(file), file.name);
+  requestAssessmentReplacement(() => void handleFileFromStore(file), file.name);
 }
 
 function handleRecentFile(entry: RecentFileEntry) {
@@ -529,6 +582,8 @@ function exportJsonSummary() {
           {navigateTo}
           downloadExampleAssessment={downloadExampleAssessment}
           handleFile={handleIncomingFile}
+          {clipboardSupported}
+          importFromClipboard={importClipboardAssessment}
         />
       </div>
 
