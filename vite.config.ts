@@ -2,6 +2,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
+import tailwindcss from "@tailwindcss/vite";
 
 const buildTarget = (process.env.BUILD_TARGET ?? "inline") as "inline" | "cdn";
 const isCdn = buildTarget === "cdn";
@@ -43,6 +44,7 @@ const outputName = buildTarget === "cdn" ? "cdn.html" : "standalone.html";
 export default defineConfig({
   base: isCdn ? "./" : "/",
   plugins: [
+    tailwindcss(),
     svelte(),
     !isCdn && viteSingleFile(),
     katexShim(),

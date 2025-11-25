@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "rollup-vite": "cross-env node_modules/vite/bin/vite.js",
     "rolldown-vite": "cross-env node_modules/rolldown-vite/bin/vite.js",
     "dev": "rolldown-vite",
     "build:standalone": "cross-env BUILD_TARGET=inline pnpm run rolldown-vite build",
@@ -20,6 +21,7 @@
     "test:examples": "tsx scripts/test-examples.ts"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.1.17",
     "idb": "^8.0.3",
     "katex": "^0.16.25",
     "lucide-svelte": "^0.554.0",
@@ -32,14 +34,12 @@
     "@biomejs/biome": "^2.3.7",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@tailwindcss/forms": "^0.5.10",
-    "@tailwindcss/postcss": "^4.1.17",
     "@tsconfig/svelte": "^5.0.6",
     "@types/katex": "^0.16.7",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.10.1",
     "cross-env": "^10.1.0",
     "jsdom": "^27.2.0",
-    "postcss": "^8.5.6",
     "rolldown-vite": "^7.2.7",
     "svelte-check": "^4.3.4",
     "tailwindcss": "^4.1.17",
