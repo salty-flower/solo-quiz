@@ -63,6 +63,7 @@ let requireAllAnsweredChecked = false;
 let assessment: Assessment | null = null;
 let questions: Question[] = [];
 let answers: Record<string, AnswerValue> = {};
+let orderingInitials: Record<string, string[]> = {};
 let touchedQuestions = new Set<string>();
 let currentIndex = 0;
 let currentQuestion: Question | undefined;
@@ -108,6 +109,7 @@ const {
   totalQuestions,
   progressValue,
   submitDisabled,
+  orderingInitial,
   refreshRecentFiles,
   handleFile: handleFileFromStore,
   handleClipboardContent: handleClipboardContentFromStore,
@@ -164,6 +166,7 @@ $: timeDisplay =
 $: assessment = $assessmentStore;
 $: questions = $questionsStore;
 $: answers = $answersStore;
+$: orderingInitials = $orderingInitial;
 $: touchedQuestions = $touchedQuestionsStore;
 $: currentIndex = $currentIndexStore;
 $: currentQuestion = $currentQuestionStore;
@@ -676,6 +679,7 @@ function exportJsonSummary() {
               {currentResult}
               context={questionContext}
               {touchedQuestions}
+              {orderingInitials}
               {updateTouched}
               {setOrderingTouched}
               bind:questionElement
