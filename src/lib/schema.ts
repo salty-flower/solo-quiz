@@ -78,6 +78,7 @@ const orderingQuestion = baseQuestion.extend({
   type: z.literal("ordering"),
   items: z.array(z.string().min(1, "Ordering item cannot be empty")).min(2),
   correctOrder: z.array(z.string().min(1)).min(2),
+  shuffleItems: z.boolean().default(true),
 });
 
 const subjectiveQuestion = baseQuestion.extend({

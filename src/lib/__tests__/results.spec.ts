@@ -65,6 +65,7 @@ const orderingQuestion: OrderingQuestion = {
   text: "Order",
   items: ["a", "b", "c"],
   correctOrder: ["b", "a", "c"],
+  shuffleItems: true,
 };
 
 const subjectiveQuestion: SubjectiveQuestion = {

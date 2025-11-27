@@ -49,6 +49,7 @@ function createQuizStore() {
   const answers = writable<Record<string, AnswerValue>>({});
   const touchedQuestions = writable<Set<string>>(new Set());
   const orderingTouched = writable<Set<string>>(new Set());
+  const orderingInitial = writable<Record<string, string[]>>({});
   const currentIndex = writable(0);
   const parseErrors = writable<{ path: string; message: string }[]>([]);
   const startedAt = writable<Date | null>(null);
@@ -124,13 +125,22 @@ function createQuizStore() {
 
   function initializeAnswers(list: Question[]) {
     const result: Record<string, AnswerValue> = {};
+    const initialOrdering: Record<string, string[]> = {};
     for (const question of list) {
-      if (question.type === "multi" || question.type === "ordering") {
+      if (question.type === "multi") {
         result[question.id] = [];
+      } else if (question.type === "ordering") {
+        const sequence =
+          question.shuffleItems === false
+            ? [...question.items]
+            : shuffle(question.items);
+        initialOrdering[question.id] = sequence;
+        result[question.id] = sequence;
       } else {
         result[question.id] = "";
       }
     }
+    orderingInitial.set(initialOrdering);
     return result;
   }
 
@@ -353,6 +363,7 @@ function createQuizStore() {
     answers,
     touchedQuestions,
     orderingTouched,
+    orderingInitial,
     currentIndex,
     parseErrors,
     startedAt,

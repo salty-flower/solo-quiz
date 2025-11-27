@@ -78,7 +78,8 @@
       "id": "q5",
       "type": "ordering",
       "contextId": "mars-outpost",
-      "text": "Order the steps mission control follows to bring the habitat online after the cargo lander arrives.",
+      "text": "Order the steps mission control follows to bring the habitat online after the cargo lander arrives. The options below are shuffled by default; set the optional `shuffleItems` flag to false if you want to keep the authored order instead.",
+      "shuffleItems": true,
       "items": [
         "Switch on environmental monitors",
         "Deploy and orient the solar array",

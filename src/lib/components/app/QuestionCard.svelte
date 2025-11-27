@@ -23,6 +23,7 @@ export let question: Question;
 export let index: number;
 export let totalQuestions: number;
 export let answers: Record<string, AnswerValue>;
+export let orderingInitials: Record<string, string[]>;
 export let currentResult: QuestionResult | null = null;
 export let context: AssessmentContext | null = null;
 export let touchedQuestions: Set<string>;
@@ -39,7 +40,7 @@ function moveOrdering(
   const current =
     Array.isArray(currentValue) && currentValue.length > 0
       ? ([...currentValue] as string[])
-      : [...question.items];
+      : [...(orderingInitials[question.id] ?? question.items)];
   const targetIndex = itemIndex + direction;
   if (targetIndex < 0 || targetIndex >= current.length) return;
   [current[itemIndex], current[targetIndex]] = [
@@ -51,8 +52,9 @@ function moveOrdering(
 }
 
 function resetOrdering(question: OrderingQuestion) {
+  const initialSequence = orderingInitials[question.id] ?? question.items;
   setOrderingTouched(question.id, false);
-  updateTouched(question, [...question.items]);
+  updateTouched(question, [...initialSequence]);
 }
 </script>
 
@@ -205,7 +207,7 @@ function resetOrdering(question: OrderingQuestion) {
     Array.isArray(answers[orderingQuestion.id]) &&
     (answers[orderingQuestion.id] as string[]).length > 0
       ? (answers[orderingQuestion.id] as string[])
-      : orderingQuestion.items}
+      : orderingInitials[orderingQuestion.id] ?? orderingQuestion.items}
   <div class="space-y-2">
     {#each orderingSequence as item, itemIndex}
       <div class="flex items-center gap-2 rounded-md border bg-card/60 px-3 py-2 text-sm">
