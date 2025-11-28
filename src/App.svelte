@@ -671,19 +671,21 @@ function exportJsonSummary() {
           {/if}
 
           {#if currentQuestion}
-            <QuestionCard
-              question={currentQuestion}
-              index={currentIndex}
-              totalQuestions={questions.length}
-              {answers}
-              {currentResult}
-              context={questionContext}
-              {touchedQuestions}
-              {orderingInitials}
-              {updateTouched}
-              {setOrderingTouched}
-              bind:questionElement
-            />
+            {#key currentQuestion.id}
+              <QuestionCard
+                question={currentQuestion}
+                index={currentIndex}
+                totalQuestions={questions.length}
+                {answers}
+                {currentResult}
+                context={questionContext}
+                {touchedQuestions}
+                {orderingInitials}
+                {updateTouched}
+                {setOrderingTouched}
+                bind:questionElement
+              />
+            {/key}
           {/if}
 
           <QuizNavigation
