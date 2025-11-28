@@ -23,7 +23,6 @@ export let panelVisibility: PanelVisibility;
 export let togglePanel: (key: PanelKey) => void;
 export let requireAllAnsweredChecked = false;
 export let setRequireAllAnswered: (value: boolean) => void;
-export let setNoBackMode: (value: boolean) => void;
 export let exampleAssessments: ExampleAssessment[] = [];
 export let recentFiles: RecentFileEntry[] = [];
 export let loadRecentAssessment: (
@@ -166,7 +165,6 @@ function incorrectCount(attempt: SubmissionSummary): number {
     {requireAllAnsweredChecked}
     {setRequireAllAnswered}
     {noBackModeEnabled}
-    {setNoBackMode}
     {exampleAssessments}
     {downloadExampleAssessment}
     {handleFile}

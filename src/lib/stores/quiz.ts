@@ -172,6 +172,7 @@ function createQuizStore() {
     parseErrors.set([]);
     submitted.set(false);
     submission.set(null);
+    noBackMode.set(Boolean(data.meta.noBackNavigation));
     startedAt.set(new Date());
     elapsedSec.set(0);
     const limit = data.meta.timeLimitSec ?? null;
@@ -316,10 +317,6 @@ function createQuizStore() {
     requireAllAnswered.set(value);
   }
 
-  function setNoBackMode(value: boolean) {
-    noBackMode.set(value);
-  }
-
   function submitQuiz(auto = false) {
     const currentAssessment = get(assessment);
     if (!currentAssessment || get(submitted)) return;
@@ -407,7 +404,6 @@ function createQuizStore() {
     setOrderingTouched,
     setCurrentIndex,
     setRequireAllAnswered,
-    setNoBackMode,
     submitQuiz,
     retakeIncorrectQuestions,
     resetAssessment,

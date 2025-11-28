@@ -123,7 +123,6 @@ const {
   setCurrentIndex,
   setRequireAllAnswered,
   noBackMode,
-  setNoBackMode,
   submitQuiz,
   retakeIncorrectQuestions,
   resetAssessment,
@@ -607,7 +606,6 @@ function exportJsonSummary() {
           requireAllAnsweredChecked={requireAllAnsweredChecked}
           setRequireAllAnswered={setRequireAllAnswered}
           noBackModeEnabled={noBackModeEnabled}
-          setNoBackMode={setNoBackMode}
           {exampleAssessments}
           recentFiles={$recentFiles}
           loadRecentAssessment={handleRecentFile}

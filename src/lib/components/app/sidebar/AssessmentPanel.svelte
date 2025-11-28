@@ -19,7 +19,6 @@ export let togglePanel: (key: PanelKey) => void;
 export let requireAllAnsweredChecked = false;
 export let setRequireAllAnswered: (value: boolean) => void;
 export let noBackModeEnabled = false;
-export let setNoBackMode: (value: boolean) => void;
 export let exampleAssessments: ExampleAssessment[] = [];
 export let downloadExampleAssessment: (id: string) => void;
 export let handleFile: (file: File) => Promise<void> | void;
@@ -115,14 +114,16 @@ function onFileInputChange(event: Event) {
             on:change={(event) => setRequireAllAnswered(event.detail)}
           />
         </label>
-        <label class="flex items-center justify-between text-sm">
-          <span>Disable going back after advancing</span>
-          <Switch
-            checked={noBackModeEnabled}
-            label="No go-back mode"
-            on:change={(event) => setNoBackMode(event.detail)}
-          />
-        </label>
+        <div class="space-y-1 rounded-md border px-3 py-2 text-sm">
+          <p class="font-medium">Navigation policy</p>
+          <p class="text-xs text-muted-foreground">
+            {#if noBackModeEnabled}
+              Set by the assessment author: advancing locks out previous questions.
+            {:else}
+              This assessment allows moving backward to earlier questions.
+            {/if}
+          </p>
+        </div>
         <Separator />
         <div class="space-y-2">
           <p class="text-sm font-medium">Example assessments</p>

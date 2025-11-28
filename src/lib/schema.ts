@@ -111,6 +111,7 @@ const metaSchema = z.object({
   description: z.string().optional(),
   shuffleQuestions: z.boolean().optional(),
   timeLimitSec: z.number().int().positive().optional(),
+  noBackNavigation: z.boolean().optional(),
 });
 
 export const assessmentSchema = z
