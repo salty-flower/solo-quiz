@@ -18,6 +18,8 @@ export let panelVisibility: PanelVisibility;
 export let togglePanel: (key: PanelKey) => void;
 export let requireAllAnsweredChecked = false;
 export let setRequireAllAnswered: (value: boolean) => void;
+export let noBackModeEnabled = false;
+export let setNoBackMode: (value: boolean) => void;
 export let exampleAssessments: ExampleAssessment[] = [];
 export let downloadExampleAssessment: (id: string) => void;
 export let handleFile: (file: File) => Promise<void> | void;
@@ -111,6 +113,14 @@ function onFileInputChange(event: Event) {
             checked={requireAllAnsweredChecked}
             label="Require all answers"
             on:change={(event) => setRequireAllAnswered(event.detail)}
+          />
+        </label>
+        <label class="flex items-center justify-between text-sm">
+          <span>Disable going back after advancing</span>
+          <Switch
+            checked={noBackModeEnabled}
+            label="No go-back mode"
+            on:change={(event) => setNoBackMode(event.detail)}
           />
         </label>
         <Separator />

@@ -142,6 +142,17 @@ $: subjectiveResult = currentResult.requiresManualGrading
       wordDiffEligible={wordDiffEligible}
     />
 
+    <div class="rounded-md border bg-muted/20 p-4 text-sm leading-relaxed">
+      <p class="text-xs uppercase text-muted-foreground">Your note</p>
+      {#if currentResult.userNote?.trim()}
+        <p class="mt-2 whitespace-pre-wrap text-foreground">
+          {currentResult.userNote}
+        </p>
+      {:else}
+        <p class="mt-2 text-muted-foreground">No note captured for this question.</p>
+      {/if}
+    </div>
+
     <div class="rounded-md border bg-card/60 p-4 text-sm leading-relaxed">
       <p class="text-xs uppercase text-muted-foreground">Reference explanation</p>
       <div class="mt-2 text-muted-foreground">

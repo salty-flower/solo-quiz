@@ -152,6 +152,7 @@ $: {
             result.question.text,
             result.userAnswer,
             result.correctAnswer,
+            result.userNote ?? "",
             result.question.tags?.join(" ") ?? "",
           ]
             .join(" \n")

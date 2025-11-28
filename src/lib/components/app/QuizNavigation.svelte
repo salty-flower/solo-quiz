@@ -7,6 +7,7 @@ export let navigateTo: (index: number) => void | Promise<void>;
 export let resetAssessment: () => void;
 export let submitDisabled = false;
 export let submitQuiz: (autoSubmit: boolean) => void | Promise<void>;
+export let noBackModeEnabled = false;
 </script>
 
 <div class="flex flex-wrap items-center justify-between gap-3">
@@ -14,7 +15,7 @@ export let submitQuiz: (autoSubmit: boolean) => void | Promise<void>;
     <Button
       variant="outline"
       on:click={() => navigateTo(currentIndex - 1)}
-      disabled={currentIndex === 0}
+      disabled={currentIndex === 0 || noBackModeEnabled}
     >
       Previous
     </Button>

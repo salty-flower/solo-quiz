@@ -15,6 +15,9 @@ import type { PanelKey, PanelVisibility } from "../../../stores/preferences";
 export let panelVisibility: PanelVisibility;
 export let togglePanel: (key: PanelKey) => void;
 export let questions: Question[] = [];
+export let currentIndex = 0;
+export let submitted = false;
+export let noBackModeEnabled = false;
 export let questionNavStatus: (
   question: Question,
   index: number,
@@ -64,6 +67,7 @@ export let navigateTo: (index: number) => void | Promise<void>;
                 index,
               )}`}
               on:click={() => navigateTo(index)}
+              disabled={noBackModeEnabled && !submitted && index < currentIndex}
               aria-label={status.label}
               title={status.label}
             >

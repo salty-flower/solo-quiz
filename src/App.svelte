@@ -63,6 +63,7 @@ let requireAllAnsweredChecked = false;
 let assessment: Assessment | null = null;
 let questions: Question[] = [];
 let answers: Record<string, AnswerValue> = {};
+let notes: Record<string, string> = {};
 let orderingInitials: Record<string, string[]> = {};
 let touchedQuestions = new Set<string>();
 let currentIndex = 0;
@@ -83,6 +84,7 @@ let pendingImportLabel = "";
 let pendingImportAction: (() => void | Promise<void>) | null = null;
 let clipboardSupported = false;
 let clipboardAutoAttempted = false;
+let noBackModeEnabled = false;
 const theme = preferences.theme;
 const panelVisibility = preferences.panelVisibility;
 const sidebarVisible = preferences.sidebarVisible;
@@ -93,6 +95,7 @@ const {
   assessment: assessmentStore,
   questions: questionsStore,
   answers: answersStore,
+  notes: notesStore,
   touchedQuestions: touchedQuestionsStore,
   currentIndex: currentIndexStore,
   currentQuestion: currentQuestionStore,
@@ -115,9 +118,12 @@ const {
   handleClipboardContent: handleClipboardContentFromStore,
   loadRecentAssessment: loadRecentAssessmentFromStore,
   updateTouched,
+  updateNote,
   setOrderingTouched,
   setCurrentIndex,
   setRequireAllAnswered,
+  noBackMode,
+  setNoBackMode,
   submitQuiz,
   retakeIncorrectQuestions,
   resetAssessment,
@@ -166,6 +172,7 @@ $: timeDisplay =
 $: assessment = $assessmentStore;
 $: questions = $questionsStore;
 $: answers = $answersStore;
+$: notes = $notesStore;
 $: orderingInitials = $orderingInitial;
 $: touchedQuestions = $touchedQuestionsStore;
 $: currentIndex = $currentIndexStore;
@@ -178,6 +185,7 @@ $: timeRemaining = $timeRemainingStore;
 $: submitted = $submittedStore;
 $: submission = $submissionStore;
 $: submitDisabledValue = $submitDisabled;
+$: noBackModeEnabled = $noBackMode;
 $: contextMap = assessment?.contexts?.length
   ? new Map(assessment.contexts.map((context) => [context.id, context]))
   : new Map();
@@ -418,6 +426,7 @@ $: questionNavStatus = (
  */
 async function navigateTo(index: number) {
   if (index < 0 || index >= questions.length) return;
+  if (noBackModeEnabled && !submitted && index < currentIndex) return;
   setCurrentIndex(index);
   await tick();
   questionElement?.focus();
@@ -442,6 +451,7 @@ function exportCsv() {
       weight: entry.weight,
       tags: entry.tags,
       userAnswer: entry.userAnswer,
+      userNote: entry.userNote,
       correctAnswer: entry.correctAnswer,
       earned: entry.earned,
       max: entry.max,
@@ -540,6 +550,7 @@ function exportJsonSummary() {
           earned: entry.earned,
           max: entry.max,
           userAnswer: entry.userAnswer,
+          userNote: entry.userNote,
           correctAnswer: entry.correctAnswer,
           feedback: entry.feedback,
           rubrics: entry.rubrics,
@@ -595,6 +606,8 @@ function exportJsonSummary() {
           togglePanel={togglePanel}
           requireAllAnsweredChecked={requireAllAnsweredChecked}
           setRequireAllAnswered={setRequireAllAnswered}
+          noBackModeEnabled={noBackModeEnabled}
+          setNoBackMode={setNoBackMode}
           {exampleAssessments}
           recentFiles={$recentFiles}
           loadRecentAssessment={handleRecentFile}
@@ -606,6 +619,8 @@ function exportJsonSummary() {
           deleteAttemptsByFingerprint={deleteAttemptsByFingerprint}
           currentAssessmentTitle={assessment ? assessment.meta.title : null}
           {questions}
+          {currentIndex}
+          {submitted}
           {questionNavStyles}
           {questionNavStatus}
           {navigateTo}
@@ -677,11 +692,13 @@ function exportJsonSummary() {
                 index={currentIndex}
                 totalQuestions={questions.length}
                 {answers}
+                {notes}
                 {currentResult}
                 context={questionContext}
                 {touchedQuestions}
                 {orderingInitials}
                 {updateTouched}
+                {updateNote}
                 {setOrderingTouched}
                 bind:questionElement
               />
@@ -695,6 +712,7 @@ function exportJsonSummary() {
             {resetAssessment}
             submitDisabled={submitDisabledValue}
             submitQuiz={submitQuiz}
+            noBackModeEnabled={noBackModeEnabled && !submitted}
           />
         {/if}
       </section>
