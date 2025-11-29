@@ -61,9 +61,9 @@ function resetOrdering(question: OrderingQuestion) {
 </script>
 
 <Card>
-  <CardHeader>
+  <CardHeader className="space-y-4 pb-4">
     <CardTitle>Question {index + 1} of {totalQuestions}</CardTitle>
-    <CardDescription className="space-y-1 text-sm">
+    <CardDescription className="space-y-3 text-sm leading-relaxed">
       {#if context}
         <div class="space-y-2 rounded-md border bg-muted/40 p-3 text-sm leading-relaxed">
           {#if context.title}
@@ -84,7 +84,7 @@ function resetOrdering(question: OrderingQuestion) {
       {/if}
     </CardDescription>
   </CardHeader>
-  <CardContent>
+  <CardContent className="space-y-6 pt-4">
     <div
       class="space-y-4 focus:outline-hidden"
       tabindex="-1"
