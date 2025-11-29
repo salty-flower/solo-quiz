@@ -21,6 +21,7 @@ const rows = [
     weight: 1,
     tags: ["tag"],
     userAnswer: "A",
+    userNote: "Remember to verify steps",
     correctAnswer: "A",
     earned: 1,
     max: 1,

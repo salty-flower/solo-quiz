@@ -47,6 +47,7 @@ function createQuizStore() {
   const assessment = writable<Assessment | null>(null);
   const questions = writable<Question[]>([]);
   const answers = writable<Record<string, AnswerValue>>({});
+  const notes = writable<Record<string, string>>({});
   const touchedQuestions = writable<Set<string>>(new Set());
   const orderingTouched = writable<Set<string>>(new Set());
   const orderingInitial = writable<Record<string, string[]>>({});
@@ -59,6 +60,7 @@ function createQuizStore() {
   const submitted = writable(false);
   const submission = writable<SubmissionSummary | null>(null);
   const requireAllAnswered = writable(false);
+  const noBackMode = writable(false);
   const recentFiles = writable<RecentFileEntry[]>([]);
 
   const answeredCount = derived(
@@ -125,8 +127,10 @@ function createQuizStore() {
 
   function initializeAnswers(list: Question[]) {
     const result: Record<string, AnswerValue> = {};
+    const initialNotes: Record<string, string> = {};
     const initialOrdering: Record<string, string[]> = {};
     for (const question of list) {
+      initialNotes[question.id] = "";
       if (question.type === "multi") {
         result[question.id] = [];
       } else if (question.type === "ordering") {
@@ -141,6 +145,7 @@ function createQuizStore() {
       }
     }
     orderingInitial.set(initialOrdering);
+    notes.set(initialNotes);
     return result;
   }
 
@@ -167,6 +172,7 @@ function createQuizStore() {
     parseErrors.set([]);
     submitted.set(false);
     submission.set(null);
+    noBackMode.set(Boolean(data.meta.noBackNavigation));
     startedAt.set(new Date());
     elapsedSec.set(0);
     const limit = data.meta.timeLimitSec ?? null;
@@ -287,6 +293,10 @@ function createQuizStore() {
     });
   }
 
+  function updateNote(questionId: string, value: string) {
+    notes.update((prev) => ({ ...prev, [questionId]: value }));
+  }
+
   function setOrderingTouched(questionId: string, value: boolean) {
     orderingTouched.update((prev) => {
       const clone = new Set(prev);
@@ -316,6 +326,7 @@ function createQuizStore() {
       assessment: currentAssessment,
       questions: get(questions),
       answers: get(answers),
+      notes: get(notes),
       startedAt: get(startedAt),
       completedAt: new Date(),
       elapsedSec: get(elapsedSec),
@@ -361,6 +372,7 @@ function createQuizStore() {
     assessment,
     questions,
     answers,
+    notes,
     touchedQuestions,
     orderingTouched,
     orderingInitial,
@@ -373,6 +385,7 @@ function createQuizStore() {
     submitted,
     submission,
     requireAllAnswered,
+    noBackMode,
     recentFiles,
     answeredCount,
     totalQuestions,
@@ -387,6 +400,7 @@ function createQuizStore() {
     handleClipboardContent,
     loadRecentAssessment,
     updateTouched,
+    updateNote,
     setOrderingTouched,
     setCurrentIndex,
     setRequireAllAnswered,

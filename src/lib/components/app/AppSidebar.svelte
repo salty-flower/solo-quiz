@@ -39,6 +39,9 @@ export let deleteAttemptsByFingerprint: (
 ) => Promise<void> | void;
 export let currentAssessmentTitle: string | null = null;
 export let questions: Question[] = [];
+export let currentIndex = 0;
+export let submitted = false;
+export let noBackModeEnabled = false;
 export let questionNavStyles: (question: Question, index: number) => string;
 export let questionNavStatus: (
   question: Question,
@@ -147,6 +150,9 @@ function incorrectCount(attempt: SubmissionSummary): number {
       {panelVisibility}
       {togglePanel}
       {questions}
+      {currentIndex}
+      {submitted}
+      {noBackModeEnabled}
       {questionNavStatus}
       {questionNavStyles}
       {navigateTo}
@@ -158,6 +164,7 @@ function incorrectCount(attempt: SubmissionSummary): number {
     {togglePanel}
     {requireAllAnsweredChecked}
     {setRequireAllAnswered}
+    {noBackModeEnabled}
     {exampleAssessments}
     {downloadExampleAssessment}
     {handleFile}

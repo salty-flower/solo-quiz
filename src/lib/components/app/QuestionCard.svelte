@@ -23,11 +23,13 @@ export let question: Question;
 export let index: number;
 export let totalQuestions: number;
 export let answers: Record<string, AnswerValue>;
+export let notes: Record<string, string>;
 export let orderingInitials: Record<string, string[]>;
 export let currentResult: QuestionResult | null = null;
 export let context: AssessmentContext | null = null;
 export let touchedQuestions: Set<string>;
 export let updateTouched: (question: Question, value: AnswerValue) => void;
+export let updateNote: (questionId: string, value: string) => void;
 export let setOrderingTouched: (id: string, value: boolean) => void;
 export let questionElement: HTMLDivElement | null = null;
 
@@ -243,6 +245,20 @@ function resetOrdering(question: OrderingQuestion) {
           </Button>
         </div>
       {/if}
+    </div>
+    <div class="space-y-2 rounded-md border bg-muted/20 p-3">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-sm font-semibold text-foreground">Notes</p>
+        <p class="text-xs text-muted-foreground">Not graded</p>
+      </div>
+      <textarea
+        class="min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        placeholder="Jot down any reminders or scratch work"
+        value={notes[question.id] ?? ""}
+        on:input={(event) =>
+          updateNote(question.id, (event.target as HTMLTextAreaElement).value)
+        }
+      ></textarea>
     </div>
   </CardContent>
   <CardHeader className="flex flex-col items-start gap-2 border-t bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between">

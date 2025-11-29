@@ -19,6 +19,7 @@ export interface CsvQuestionResult {
   weight: number;
   tags: string[];
   userAnswer: string;
+  userNote: string;
   correctAnswer: string;
   earned: number | null;
   max: number;
@@ -41,6 +42,7 @@ export function buildCsv(
     "Tags",
     "Question",
     "Your Answer",
+    "Your Note",
     "Correct Answer",
     "Earned",
     "Max",
@@ -58,6 +60,7 @@ export function buildCsv(
         row.tags.join("; "),
         row.questionText,
         row.userAnswer,
+        row.userNote,
         row.correctAnswer,
         row.earned == null ? "" : row.earned.toString(),
         row.max.toString(),

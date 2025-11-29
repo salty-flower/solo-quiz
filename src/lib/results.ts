@@ -18,6 +18,7 @@ export interface BaseQuestionResult {
   question: Question;
   max: number;
   userAnswer: string;
+  userNote: string;
   correctAnswer: string;
   feedback?: string;
   status: ResultStatus;
@@ -70,6 +71,7 @@ export interface SerializableQuestionResult {
   earned: number | null;
   max: number;
   userAnswer: string;
+  userNote: string;
   correctAnswer: string;
   feedback: string | null;
   requiresManualGrading: boolean;
@@ -79,6 +81,7 @@ export interface SerializableQuestionResult {
 export function evaluateQuestion(
   question: Question,
   value: AnswerValue,
+  note = "",
 ): QuestionResult {
   const max = questionWeight(question);
 
@@ -92,6 +95,7 @@ export function evaluateQuestion(
       status: "pending",
       max,
       userAnswer: typeof value === "string" ? value : "",
+      userNote: note,
       correctAnswer: "",
       feedback: subjective.feedback?.incorrect ?? subjective.feedback?.correct,
       rubrics: subjective.rubrics,
@@ -111,6 +115,7 @@ export function evaluateQuestion(
     isCorrect: evaluation.isCorrect,
     status: evaluation.isCorrect ? "correct" : "incorrect",
     userAnswer: evaluation.userAnswer,
+    userNote: note,
     correctAnswer: evaluation.correctAnswer,
     feedback,
     selectedOptions: evaluation.selectedOptions,
@@ -263,6 +268,7 @@ export function evaluateSubmission({
   assessment,
   questions,
   answers,
+  notes,
   startedAt,
   completedAt,
   elapsedSec,
@@ -271,13 +277,14 @@ export function evaluateSubmission({
   assessment: Assessment;
   questions: Question[];
   answers: Record<string, AnswerValue>;
+  notes: Record<string, string>;
   startedAt: Date | null;
   completedAt: Date;
   elapsedSec: number;
   autoSubmitted: boolean;
 }): SubmissionSummary {
   const results = questions.map((question) =>
-    evaluateQuestion(question, answers[question.id]),
+    evaluateQuestion(question, answers[question.id], notes[question.id] ?? ""),
   );
 
   const deterministicResults = results.filter(
@@ -354,6 +361,7 @@ export function createSerializableQuestionResult(
     earned: result.earned,
     max: result.max,
     userAnswer: result.userAnswer,
+    userNote: result.userNote,
     correctAnswer: result.correctAnswer,
     feedback: result.feedback ?? null,
     requiresManualGrading: result.requiresManualGrading,
