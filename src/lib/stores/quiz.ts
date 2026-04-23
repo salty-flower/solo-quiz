@@ -16,6 +16,7 @@ import { TIMER_INTERVAL_MS } from "../constants";
 import { registerAttempt } from "./attempts";
 import { getReviewPath, navigate } from "./router";
 import { createAssessmentFingerprint } from "../utils/assessment-fingerprint";
+import { buildPartGroups } from "../utils/part-groups";
 
 function shuffle<T>(array: T[]): T[] {
   const copy = [...array];
@@ -38,6 +39,15 @@ function isAnswered(
   if (question.type === "multi") {
     const arr = value as string[];
     return arr.length > 0;
+  }
+  if (question.type === "matching") {
+    if (typeof value !== "object" || value == null || Array.isArray(value)) {
+      return false;
+    }
+    const selections = Object.values(value).filter(
+      (entry) => typeof entry === "string" && entry.trim().length > 0,
+    );
+    return selections.length === question.prompts.length;
   }
   const str = String(value);
   return str.trim().length > 0;
@@ -140,6 +150,8 @@ function createQuizStore() {
             : shuffle(question.items);
         initialOrdering[question.id] = sequence;
         result[question.id] = sequence;
+      } else if (question.type === "matching") {
+        result[question.id] = {};
       } else {
         result[question.id] = "";
       }
@@ -162,7 +174,9 @@ function createQuizStore() {
     assessment.set(data);
     const baseQuestions = options?.questions ?? data.questions;
     const orderedQuestions = data.meta.shuffleQuestions
-      ? shuffle(baseQuestions)
+      ? shuffle(buildPartGroups(baseQuestions)).flatMap((group) =>
+          group.entries.map((entry) => entry.question),
+        )
       : [...baseQuestions];
     questions.set(orderedQuestions);
     answers.set(initializeAnswers(orderedQuestions));

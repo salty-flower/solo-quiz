@@ -2,6 +2,7 @@ import {
   questionWeight,
   type Assessment,
   type FitbQuestion,
+  type MatchingQuestion,
   type MultiQuestion,
   type NumericQuestion,
   type OrderingQuestion,
@@ -12,7 +13,7 @@ import {
 
 export type ResultStatus = "correct" | "incorrect" | "pending";
 
-export type AnswerValue = string | string[] | null;
+export type AnswerValue = string | string[] | Record<string, string> | null;
 
 export interface BaseQuestionResult {
   question: Question;
@@ -23,6 +24,7 @@ export interface BaseQuestionResult {
   feedback?: string;
   status: ResultStatus;
   selectedOptions?: string[];
+  matchedPairs?: Record<string, string>;
 }
 
 export interface DeterministicQuestionResult extends BaseQuestionResult {
@@ -119,6 +121,7 @@ export function evaluateQuestion(
     correctAnswer: evaluation.correctAnswer,
     feedback,
     selectedOptions: evaluation.selectedOptions,
+    matchedPairs: evaluation.matchedPairs,
   };
 }
 
@@ -127,13 +130,15 @@ type DeterministicQuestion =
   | MultiQuestion
   | FitbQuestion
   | NumericQuestion
-  | OrderingQuestion;
+  | OrderingQuestion
+  | MatchingQuestion;
 
 interface DeterministicEvaluation {
   userAnswer: string;
   correctAnswer: string;
   isCorrect: boolean;
   selectedOptions?: string[];
+  matchedPairs?: Record<string, string>;
 }
 
 function evaluateDeterministicQuestion(
@@ -151,6 +156,8 @@ function evaluateDeterministicQuestion(
       return evaluateNumericQuestion(question, value);
     case "ordering":
       return evaluateOrderingQuestion(question, value);
+    case "matching":
+      return evaluateMatchingQuestion(question, value);
     default: {
       return assertUnreachable(question);
     }
@@ -231,15 +238,19 @@ function evaluateNumericQuestion(
   const text = typeof value === "string" ? value.trim() : "";
   const parsed = Number.parseFloat(text);
   const tolerance = question.tolerance ?? 0;
-  const withinTolerance = !Number.isNaN(parsed)
-    ? Math.abs(parsed - question.correct) <= tolerance
-    : false;
+  const withinTolerance =
+    !Number.isNaN(parsed) &&
+    (question.range
+      ? parsed >= question.range[0] && parsed <= question.range[1]
+      : Math.abs(parsed - question.correct) <= tolerance);
 
   return {
     userAnswer: text,
-    correctAnswer: tolerance
-      ? `${question.correct} ± ${tolerance}`
-      : question.correct.toString(),
+    correctAnswer: question.range
+      ? `[${question.range[0]}, ${question.range[1]}]`
+      : tolerance
+        ? `${question.correct} ± ${tolerance}`
+        : question.correct.toString(),
     isCorrect: withinTolerance,
   };
 }
@@ -261,6 +272,36 @@ function evaluateOrderingQuestion(
       Array.isArray(value) &&
       value.length > 0 &&
       arraysEqual(providedSequence, question.correctOrder),
+  };
+}
+
+function evaluateMatchingQuestion(
+  question: MatchingQuestion,
+  value: AnswerValue,
+): DeterministicEvaluation {
+  const providedMatches =
+    typeof value === "object" && value != null && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value).filter(
+            ([promptId, optionId]) =>
+              typeof promptId === "string" &&
+              typeof optionId === "string" &&
+              optionId.trim().length > 0,
+          ),
+        )
+      : {};
+
+  const isCorrect =
+    Object.keys(providedMatches).length === question.prompts.length &&
+    question.prompts.every(
+      (prompt) => providedMatches[prompt.id] === question.correct[prompt.id],
+    );
+
+  return {
+    userAnswer: renderMatchingPairs(question, providedMatches),
+    correctAnswer: renderMatchingPairs(question, question.correct),
+    isCorrect,
+    matchedPairs: providedMatches,
   };
 }
 
@@ -388,6 +429,28 @@ function renderOptionLabels(
     question.options.map((option) => [option.id, option.label] as const),
   );
   return ids.map((id) => map.get(id) ?? id).join(", ");
+}
+
+function renderMatchingPairs(
+  question: MatchingQuestion,
+  matches: Record<string, string>,
+): string {
+  const promptMap = new Map(
+    question.prompts.map((prompt) => [prompt.id, prompt.prompt] as const),
+  );
+  const optionMap = new Map(
+    question.options.map((option) => [option.id, option.label] as const),
+  );
+
+  return question.prompts
+    .filter((prompt) => matches[prompt.id])
+    .map((prompt) => {
+      const optionId = matches[prompt.id];
+      const left = promptMap.get(prompt.id) ?? prompt.id;
+      const right = optionMap.get(optionId) ?? optionId;
+      return `${left} → ${right}`;
+    })
+    .join("; ");
 }
 
 function arraysEqual(a: string[], b: string[]): boolean {

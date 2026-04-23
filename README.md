@@ -7,7 +7,8 @@ A local-first quiz runner built with Svelte, TailwindCSS, and shadcn-svelte comp
 - ✅ Works under `file://` with an all-in-one `standalone.html`
 - ✅ Lightweight `cdn.html` build that pulls KaTeX from jsDelivr when online
 - ✅ Drag-and-drop or file picker JSON import with zod validation and friendly error reporting
-- ✅ Supports single, multi, fill-in-the-blank, numeric, and ordering questions with per-question weighting and feedback
+- ✅ Supports single, multi, fill-in-the-blank, numeric, ordering, matching, and subjective questions with per-question weighting and feedback
+- ✅ Supports question images, native multi-part group metadata, weighted subjective rubrics, and numeric answer ranges
 - ✅ Optional shared contexts so multiple questions can reference the same passage or scenario
 - ✅ Review dialog with scoring summary, KaTeX rendering, and CSV export
 - ✅ IndexedDB powered recent file list with in-memory fallback

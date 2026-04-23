@@ -158,7 +158,9 @@ function createLlmStore() {
           existing.rubricBreakdown.length !== params.rubrics.length ||
           params.rubrics.some(
             (rubric, index) =>
-              existing.rubricBreakdown[index]?.rubric !== rubric.title,
+              existing.rubricBreakdown[index]?.rubric !== rubric.title ||
+              existing.rubricBreakdown[index]?.description !==
+                rubric.description,
           );
         if (!needsUpdate) {
           return prev;

@@ -11,6 +11,7 @@ import {
 } from "../../ui/card";
 import type { Question } from "../../../schema";
 import type { PanelKey, PanelVisibility } from "../../../stores/preferences";
+import { buildPartGroups } from "../../../utils/part-groups";
 
 export let panelVisibility: PanelVisibility;
 export let togglePanel: (key: PanelKey) => void;
@@ -24,6 +25,10 @@ export let questionNavStatus: (
 ) => { label: string; indicator: string };
 export let questionNavStyles: (question: Question, index: number) => string;
 export let navigateTo: (index: number) => void | Promise<void>;
+
+let partGroups = buildPartGroups([]);
+
+$: partGroups = buildPartGroups(questions);
 </script>
 
 <Card>
@@ -56,27 +61,41 @@ export let navigateTo: (index: number) => void | Promise<void>;
   </CardHeader>
   {#if !panelVisibility.questions}
     <div transition:slide={{ duration: 200 }}>
-      <CardContent>
-        <nav class="grid grid-cols-5 gap-2 text-sm md:grid-cols-4 lg:grid-cols-3">
-          {#each questions as question, index}
-            {@const status = questionNavStatus(question, index)}
-            <button
-              type="button"
-              class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${questionNavStyles(
-                question,
-                index,
-              )}`}
-              on:click={() => navigateTo(index)}
-              disabled={noBackModeEnabled && !submitted && index < currentIndex}
-              aria-label={status.label}
-              title={status.label}
-            >
-              <span aria-hidden="true" class="mr-1 text-xs">{status.indicator}</span>
-              <span aria-hidden="true">{index + 1}</span>
-              <span class="sr-only">{status.label}</span>
-            </button>
-          {/each}
-        </nav>
+      <CardContent className="space-y-4">
+        {#each partGroups as group}
+          <div class="space-y-2">
+            {#if group.isMultipart}
+              <div class="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2 text-[0.7rem] uppercase tracking-wide text-muted-foreground">
+                <span class="font-semibold text-foreground">
+                  {group.title ?? "Multi-part question"}
+                </span>
+                <span>{group.entries.length} parts</span>
+              </div>
+            {/if}
+            <nav class="grid grid-cols-5 gap-2 text-sm md:grid-cols-4 lg:grid-cols-3">
+              {#each group.entries as entry}
+                {@const status = questionNavStatus(entry.question, entry.index)}
+                <button
+                  type="button"
+                  class={`flex h-10 items-center justify-center rounded-md border text-sm font-medium transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${questionNavStyles(
+                    entry.question,
+                    entry.index,
+                  )}`}
+                  on:click={() => navigateTo(entry.index)}
+                  disabled={noBackModeEnabled && !submitted && entry.index < currentIndex}
+                  aria-label={status.label}
+                  title={status.label}
+                >
+                  <span aria-hidden="true" class="mr-1 text-xs">{status.indicator}</span>
+                  <span aria-hidden="true">
+                    {group.isMultipart && entry.partLabel ? entry.partLabel : entry.index + 1}
+                  </span>
+                  <span class="sr-only">{status.label}</span>
+                </button>
+              {/each}
+            </nav>
+          </div>
+        {/each}
       </CardContent>
     </div>
   {/if}

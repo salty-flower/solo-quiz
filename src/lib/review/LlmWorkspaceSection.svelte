@@ -8,6 +8,10 @@ import { renderWithKatex } from "../katex";
 import type { LlmFeedback } from "../schema";
 import type { SubjectiveQuestionResult } from "../results";
 import { llm, type GradingWorkspace } from "../stores/llm";
+import {
+  calculateWeightedRubricFraction,
+  rubricWeight,
+} from "../utils/rubric-weights";
 
 export let result: SubjectiveQuestionResult;
 
@@ -176,6 +180,9 @@ onDestroy(() => {
           <span class="ml-1">
             {@html renderWithKatex(rubric.description)}
           </span>
+          <span class="ml-2 font-mono text-[0.65rem] uppercase tracking-wide text-muted-foreground">
+            Weight {rubricWeight(rubric)}
+          </span>
         </li>
       {/each}
     </ul>
@@ -183,16 +190,12 @@ onDestroy(() => {
   {#if workspace}
     {@const verdictOptions = ["correct", "partial", "incorrect"] as const}
     {@const summaryFieldId = `${result.question.id}-workspace-summary`}
-    {@const averageFraction =
-      workspace.rubricBreakdown.length > 0
-        ?
-            workspace.rubricBreakdown.reduce(
-              (sum, entry) => sum + entry.achievedFraction,
-              0,
-            ) / workspace.rubricBreakdown.length
-        : 0}
+    {@const weightedFraction = calculateWeightedRubricFraction(
+      result.rubrics,
+      workspace.rubricBreakdown,
+    )}
     {@const suggestedScore =
-      Math.round(averageFraction * workspace.maxScore * 100) / 100}
+      Math.round(weightedFraction * workspace.maxScore * 100) / 100}
     <div class="space-y-4 rounded-md border bg-card/70 p-4 text-sm">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -282,7 +285,14 @@ onDestroy(() => {
             <div class="space-y-2 rounded-md border bg-background/50 p-3">
               <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <span class="text-foreground">{@html renderWithKatex(rubric.rubric)}</span>
-                <span class="font-mono text-foreground">{Math.round(rubric.achievedFraction * 100)}%</span>
+                <span class="flex items-center gap-2">
+                  <span class="font-mono text-muted-foreground">
+                    W{rubricWeight(result.rubrics[rubricIndex])}
+                  </span>
+                  <span class="font-mono text-foreground">
+                    {Math.round(rubric.achievedFraction * 100)}%
+                  </span>
+                </span>
               </div>
               {#if rubric.description}
                 <p class="text-xs text-muted-foreground">

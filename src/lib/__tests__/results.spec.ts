@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { evaluateQuestion } from "../results";
 import type {
   FitbQuestion,
+  MatchingQuestion,
   MultiQuestion,
   NumericQuestion,
   OrderingQuestion,
@@ -58,6 +59,15 @@ const numericQuestion: NumericQuestion = {
   tolerance: 0.01,
 };
 
+const numericRangeQuestion: NumericQuestion = {
+  ...baseMeta,
+  id: "num-range-1",
+  type: "numeric",
+  text: "Volatility band",
+  correct: 20,
+  range: [15, 25],
+};
+
 const orderingQuestion: OrderingQuestion = {
   ...baseMeta,
   id: "ord-1",
@@ -68,12 +78,31 @@ const orderingQuestion: OrderingQuestion = {
   shuffleItems: true,
 };
 
+const matchingQuestion: MatchingQuestion = {
+  ...baseMeta,
+  id: "match-1",
+  type: "matching",
+  text: "Match each Greek to its meaning.",
+  prompts: [
+    { id: "delta", prompt: "Δ" },
+    { id: "gamma", prompt: "Γ" },
+  ],
+  options: [
+    { id: "price", label: "Rate of change of option price" },
+    { id: "curvature", label: "Curvature of price with respect to spot" },
+  ],
+  correct: {
+    delta: "price",
+    gamma: "curvature",
+  },
+};
+
 const subjectiveQuestion: SubjectiveQuestion = {
   ...baseMeta,
   id: "subj-1",
   type: "subjective",
   text: "Explain",
-  rubrics: [{ title: "quality", description: "Quality" }],
+  rubrics: [{ title: "quality", description: "Quality", weight: 2 }],
 };
 
 describe("evaluateQuestion", () => {
@@ -105,6 +134,14 @@ describe("evaluateQuestion", () => {
     expect(result.correctAnswer).toContain("± 0.01");
   });
 
+  it("accepts numeric answers inside an asymmetric range", () => {
+    const inside = evaluateQuestion(numericRangeQuestion, "24.5");
+    const outside = evaluateQuestion(numericRangeQuestion, "26");
+    expect(inside.status).toBe("correct");
+    expect(inside.correctAnswer).toContain("[15, 25]");
+    expect(outside.status).toBe("incorrect");
+  });
+
   it("compares ordering questions strictly", () => {
     const incorrect = evaluateQuestion(orderingQuestion, ["a", "b", "c"]);
     const correct = evaluateQuestion(
@@ -115,10 +152,29 @@ describe("evaluateQuestion", () => {
     expect(correct.status).toBe("correct");
   });
 
+  it("compares matching questions by prompt-to-option pairs", () => {
+    const incorrect = evaluateQuestion(matchingQuestion, {
+      delta: "curvature",
+      gamma: "price",
+    });
+    const correct = evaluateQuestion(matchingQuestion, {
+      delta: "price",
+      gamma: "curvature",
+    });
+    expect(incorrect.status).toBe("incorrect");
+    expect(correct.status).toBe("correct");
+    expect(correct.userAnswer).toContain("Δ");
+    expect(correct.correctAnswer).toContain("Rate of change");
+  });
+
   it("marks subjective questions as pending", () => {
     const result = evaluateQuestion(subjectiveQuestion, "thoughts");
     expect(result.status).toBe("pending");
     expect(result.requiresManualGrading).toBe(true);
     expect(result.earned).toBeNull();
+    if (!result.requiresManualGrading) {
+      throw new Error("Expected a manually graded result");
+    }
+    expect(result.rubrics[0]?.weight).toBe(2);
   });
 });

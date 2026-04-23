@@ -1,4 +1,5 @@
 <script lang="ts">
+import QuestionImage from "../components/QuestionImage.svelte";
 import {
   Card,
   CardContent,
@@ -35,10 +36,26 @@ $: meta = statusMeta(currentResult as { status: ResultStatus });
 $: subjectiveResult = currentResult.requiresManualGrading
   ? (currentResult as SubjectiveQuestionResult)
   : null;
+
+function formatPartLabel(label: string) {
+  return /^[([{].*[)\]}]$/.test(label.trim())
+    ? `Part ${label.trim()}`
+    : `Part (${label.trim()})`;
+}
 </script>
 
 <Card>
   <CardHeader>
+    {#if currentResult.question.part}
+      <div class="mb-3 flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+        {#if currentResult.question.part.title}
+          <span class="rounded-full bg-muted px-2 py-1 font-semibold text-foreground">
+            {@html renderWithKatex(currentResult.question.part.title)}
+          </span>
+        {/if}
+        <span>{formatPartLabel(currentResult.question.part.label)}</span>
+      </div>
+    {/if}
     <CardTitle>
       Question {visiblePosition} of {visibleEntriesLength}
       <span class="text-xs font-normal text-muted-foreground">(original #{activeIndex + 1})</span>
@@ -55,6 +72,9 @@ $: subjectiveResult = currentResult.requiresManualGrading
             {@html renderWithKatex(context.body)}
           </div>
         </div>
+      {/if}
+      {#if currentResult.question.image}
+        <QuestionImage image={currentResult.question.image} />
       {/if}
       <div class="space-y-2 leading-relaxed">
         {@html renderWithKatex(currentResult.question.text)}
@@ -126,6 +146,40 @@ $: subjectiveResult = currentResult.requiresManualGrading
                 {:else}
                   <span>No explanation provided.</span>
                 {/if}
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    {#if currentResult.question.type === "matching"}
+      {@const matchingQuestion = currentResult.question}
+      {@const matchedPairs = currentResult.matchedPairs ?? {}}
+      <div class="rounded-md border bg-card/60 p-4">
+        <p class="text-xs uppercase text-muted-foreground">Matches</p>
+        <div class="mt-3 space-y-2">
+          {#each matchingQuestion.prompts as prompt}
+            {@const selectedOptionId = matchedPairs[prompt.id] ?? ""}
+            {@const selectedOption =
+              matchingQuestion.options.find((option) => option.id === selectedOptionId)}
+            {@const correctOption =
+              matchingQuestion.options.find(
+                (option) => option.id === matchingQuestion.correct[prompt.id],
+              )}
+            <div class="rounded-md border bg-muted/20 p-3 text-sm">
+              <div class="font-medium text-foreground">
+                {@html renderWithKatex(prompt.prompt)}
+              </div>
+              <div class="mt-2 space-y-1 text-xs text-muted-foreground">
+                <p>
+                  <span class="font-semibold text-foreground">Your match:</span>
+                  {" "}{selectedOption?.label ?? "No selection"}
+                </p>
+                <p>
+                  <span class="font-semibold text-foreground">Correct match:</span>
+                  {" "}{correctOption?.label ?? matchingQuestion.correct[prompt.id]}
+                </p>
               </div>
             </div>
           {/each}

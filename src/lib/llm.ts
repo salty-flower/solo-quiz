@@ -1,6 +1,7 @@
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { SubjectiveQuestion } from "./schema";
 import { llmFeedbackSchema } from "./schema";
+import { rubricWeight } from "./utils/rubric-weights";
 
 export const llmFeedbackJsonSchema = JSON.stringify(
   zodToJsonSchema(
@@ -60,7 +61,10 @@ export function buildSubjectivePrompt({
 }: PromptContext): string {
   const rubricLines = question.rubrics
     .map(
-      (rubric, index) => `${index + 1}. ${rubric.title}: ${rubric.description}`,
+      (rubric, index) =>
+        `${index + 1}. ${rubric.title}: ${rubric.description} (Weight: ${rubricWeight(
+          rubric,
+        )})`,
     )
     .join("\n");
   const answerText =

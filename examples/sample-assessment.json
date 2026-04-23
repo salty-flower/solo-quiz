@@ -2,15 +2,20 @@
   "schemaVersion": "1.0",
   "meta": {
     "title": "Sample STEM Quiz",
-    "description": "Demonstrates every supported question type including math rendering.",
+    "description": "Demonstrates every supported question type, images, weighted rubrics, numeric ranges, and multi-part grouping.",
     "shuffleQuestions": true,
     "timeLimitSec": 600
   },
   "contexts": [
     {
+      "id": "greeks-board",
+      "title": "Options desk whiteboard",
+      "body": "A trader is reviewing the Greeks for a short-dated call spread. Use the next three parts together: first read the payoff diagram, then match the symbols, then explain the intuition in prose."
+    },
+    {
       "id": "mars-outpost",
       "title": "Mars outpost briefing",
-      "body": "A research crew is preparing a pressurized habitat on Mars. Solar arrays provide 15 kW at peak output and charge a 50 kWh battery bank overnight. Deliveries arrive in this order: cargo lander, power module, crew vehicle. Use this shared context for the next two questions."
+      "body": "A research crew is preparing a pressurized habitat on Mars. Solar arrays provide 15 kW at peak output and charge a 50 kWh battery bank overnight. Deliveries arrive in this order: cargo lander, power module, crew vehicle. Use this shared context for the final ordering question."
     }
   ],
   "questions": [
@@ -68,14 +73,102 @@
     {
       "id": "q4",
       "type": "numeric",
-      "text": "How many degrees are there in $\\pi$ radians?",
-      "correct": 180,
-      "tolerance": 0,
+      "contextId": "greeks-board",
+      "part": {
+        "groupId": "greeks-drill",
+        "label": "a",
+        "title": "Greeks drill"
+      },
+      "image": {
+        "url": "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='240' viewBox='0 0 480 240'%3E%3Crect width='480' height='240' fill='%23f8fafc'/%3E%3Cline x1='40' y1='200' x2='440' y2='200' stroke='%2394a3b8' stroke-width='2'/%3E%3Cline x1='240' y1='30' x2='240' y2='210' stroke='%2394a3b8' stroke-width='2'/%3E%3Cpath d='M70 190 C140 190 180 160 240 120 C300 80 340 50 410 50' fill='none' stroke='%230f172a' stroke-width='4'/%3E%3Ctext x='320' y='72' fill='%230f172a' font-size='16' font-family='Arial'%3EConvex payoff%3C/text%3E%3C/svg%3E",
+        "alt": "A convex payoff diagram rising faster as spot price increases.",
+        "caption": "Use the convex payoff sketch to estimate a plausible annualized volatility band."
+      },
+      "text": "Looking at the convex payoff sketch, what annualized volatility range would be a plausible estimate for this short-dated structure?",
+      "correct": 20,
+      "range": [15, 25],
       "weight": 1.5,
-      "tags": ["trigonometry"]
+      "tags": ["options", "volatility"]
     },
     {
       "id": "q5",
+      "type": "matching",
+      "contextId": "greeks-board",
+      "part": {
+        "groupId": "greeks-drill",
+        "label": "b"
+      },
+      "text": "Match each Greek symbol to the closest definition.",
+      "prompts": [
+        {
+          "id": "delta",
+          "prompt": "$\\\\Delta$"
+        },
+        {
+          "id": "gamma",
+          "prompt": "$\\\\Gamma$"
+        },
+        {
+          "id": "theta",
+          "prompt": "$\\\\Theta$"
+        }
+      ],
+      "options": [
+        {
+          "id": "price-slope",
+          "label": "Rate of change of option value with respect to spot"
+        },
+        {
+          "id": "curvature",
+          "label": "Change in delta as spot moves"
+        },
+        {
+          "id": "time-decay",
+          "label": "Sensitivity of value to the passage of time"
+        }
+      ],
+      "correct": {
+        "delta": "price-slope",
+        "gamma": "curvature",
+        "theta": "time-decay"
+      },
+      "weight": 1,
+      "tags": ["options", "greeks"]
+    },
+    {
+      "id": "q6",
+      "type": "subjective",
+      "contextId": "greeks-board",
+      "part": {
+        "groupId": "greeks-drill",
+        "label": "c"
+      },
+      "text": "Using the payoff sketch and the matching definitions, explain why traders care about gamma as expiry approaches.",
+      "rubrics": [
+        {
+          "title": "States the principle",
+          "description": "Explains that gamma measures how quickly delta changes as spot moves.",
+          "weight": 2
+        },
+        {
+          "title": "Connects to trading impact",
+          "description": "Links high gamma near expiry to re-hedging frequency, nonlinearity, or risk management decisions.",
+          "weight": 2
+        },
+        {
+          "title": "Clarity",
+          "description": "Provides a coherent explanation that is understandable to another student.",
+          "weight": 1
+        }
+      ],
+      "weight": 3,
+      "tags": ["options", "reasoning"],
+      "feedback": {
+        "incorrect": "A human or LLM grader should review this response using the provided rubrics."
+      }
+    },
+    {
+      "id": "q7",
       "type": "ordering",
       "contextId": "mars-outpost",
       "text": "Order the steps mission control follows to bring the habitat online after the cargo lander arrives. The options below are shuffled by default; set the optional `shuffleItems` flag to false if you want to keep the authored order instead.",
@@ -94,31 +187,6 @@
       ],
       "weight": 1,
       "tags": ["space systems"]
-    },
-    {
-      "id": "q6",
-      "type": "subjective",
-      "contextId": "mars-outpost",
-      "text": "Using the Mars outpost briefing, explain why conservation of energy is useful when planning the power budget for night-time operations.",
-      "rubrics": [
-        {
-          "title": "States the principle",
-          "description": "Mentions that the total energy of an isolated system remains constant or that energy cannot be created or destroyed."
-        },
-        {
-          "title": "Connects to problem solving",
-          "description": "Explains how the principle simplifies calculations or reduces the number of unknowns in the described scenario."
-        },
-        {
-          "title": "Clarity",
-          "description": "Provides a coherent explanation that is understandable to another student."
-        }
-      ],
-      "weight": 3,
-      "tags": ["physics", "reasoning"],
-      "feedback": {
-        "incorrect": "A human or LLM grader should review this response using the provided rubrics."
-      }
     }
   ]
 }

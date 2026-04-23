@@ -38,6 +38,7 @@ const typeLabels: Record<string, string> = {
   fitb: "Fill in the blank",
   numeric: "Numeric",
   ordering: "Ordering",
+  matching: "Matching",
   subjective: "Subjective",
 };
 

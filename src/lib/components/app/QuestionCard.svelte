@@ -1,5 +1,6 @@
 <script lang="ts">
 import Button from "../ui/Button.svelte";
+import QuestionImage from "../QuestionImage.svelte";
 import {
   Card,
   CardContent,
@@ -9,6 +10,7 @@ import {
 } from "../ui/card";
 import { renderWithKatex } from "../../katex";
 import {
+  type MatchingQuestion,
   questionWeight,
   type AssessmentContext,
   type MultiQuestion,
@@ -58,10 +60,73 @@ function resetOrdering(question: OrderingQuestion) {
   setOrderingTouched(question.id, false);
   updateTouched(question, [...initialSequence]);
 }
+
+function formatPartLabel(label: string) {
+  return /^[([{].*[)\]}]$/.test(label.trim())
+    ? `Part ${label.trim()}`
+    : `Part (${label.trim()})`;
+}
+
+function getMatchingSelections(
+  question: MatchingQuestion,
+): Record<string, string> {
+  const current = answers[question.id];
+  if (
+    typeof current !== "object" ||
+    current == null ||
+    Array.isArray(current)
+  ) {
+    return {};
+  }
+  return { ...current };
+}
+
+function updateMatchingSelection(
+  question: MatchingQuestion,
+  promptId: string,
+  optionId: string,
+) {
+  const next = getMatchingSelections(question);
+  if (!optionId) {
+    delete next[promptId];
+    updateTouched(question, next);
+    return;
+  }
+
+  for (const [otherPromptId, selectedOptionId] of Object.entries(next)) {
+    if (otherPromptId !== promptId && selectedOptionId === optionId) {
+      delete next[otherPromptId];
+    }
+  }
+
+  next[promptId] = optionId;
+  updateTouched(question, next);
+}
+
+function matchingOptionTaken(
+  question: MatchingQuestion,
+  promptId: string,
+  optionId: string,
+) {
+  return Object.entries(getMatchingSelections(question)).some(
+    ([otherPromptId, selectedOptionId]) =>
+      otherPromptId !== promptId && selectedOptionId === optionId,
+  );
+}
 </script>
 
 <Card>
   <CardHeader className="space-y-4 pb-4">
+    {#if question.part}
+      <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+        {#if question.part.title}
+          <span class="rounded-full bg-muted px-2 py-1 font-semibold text-foreground">
+            {@html renderWithKatex(question.part.title)}
+          </span>
+        {/if}
+        <span>{formatPartLabel(question.part.label)}</span>
+      </div>
+    {/if}
     <CardTitle>Question {index + 1} of {totalQuestions}</CardTitle>
     <CardDescription className="space-y-3 text-sm leading-relaxed">
       {#if context}
@@ -75,6 +140,9 @@ function resetOrdering(question: OrderingQuestion) {
             {@html renderWithKatex(context.body)}
           </div>
         </div>
+      {/if}
+      {#if question.image}
+        <QuestionImage image={question.image} />
       {/if}
       <div class="space-y-2 leading-relaxed">
         {@html renderWithKatex(question.text)}
@@ -188,6 +256,11 @@ function resetOrdering(question: OrderingQuestion) {
                     <span class="ml-1 text-muted-foreground">
                       {@html renderWithKatex(rubric.description)}
                     </span>
+                    {#if rubric.weight != null}
+                      <span class="ml-2 font-mono uppercase tracking-wide text-muted-foreground">
+                        Weight {rubric.weight}
+                      </span>
+                    {/if}
                   </li>
                 {/each}
               </ul>
@@ -203,20 +276,20 @@ function resetOrdering(question: OrderingQuestion) {
           value={answers[question.id] as string}
           on:input={(event) => updateTouched(question, (event.target as HTMLInputElement).value)}
         />
-{:else if question.type === "ordering"}
-  {@const orderingQuestion = question as OrderingQuestion}
-  {@const orderingSequence =
-    Array.isArray(answers[orderingQuestion.id]) &&
-    (answers[orderingQuestion.id] as string[]).length > 0
-      ? (answers[orderingQuestion.id] as string[])
-      : orderingInitials[orderingQuestion.id] ?? orderingQuestion.items}
-  <div class="space-y-2">
-    {#each orderingSequence as item, itemIndex}
-      <div class="flex items-center gap-2 rounded-md border bg-card/60 px-3 py-2 text-sm">
-        <span class="flex-1">
-          {@html renderWithKatex(item)}
-        </span>
-        <div class="flex items-center gap-1">
+      {:else if question.type === "ordering"}
+        {@const orderingQuestion = question as OrderingQuestion}
+        {@const orderingSequence =
+          Array.isArray(answers[orderingQuestion.id]) &&
+          (answers[orderingQuestion.id] as string[]).length > 0
+            ? (answers[orderingQuestion.id] as string[])
+            : orderingInitials[orderingQuestion.id] ?? orderingQuestion.items}
+        <div class="space-y-2">
+          {#each orderingSequence as item, itemIndex}
+            <div class="flex items-center gap-2 rounded-md border bg-card/60 px-3 py-2 text-sm">
+              <span class="flex-1">
+                {@html renderWithKatex(item)}
+              </span>
+              <div class="flex items-center gap-1">
                 <Button
                   size="icon"
                   variant="ghost"
@@ -243,6 +316,52 @@ function resetOrdering(question: OrderingQuestion) {
           <Button variant="ghost" size="sm" on:click={() => resetOrdering(orderingQuestion)}>
             Reset order
           </Button>
+        </div>
+      {:else if question.type === "matching"}
+        {@const matchingQuestion = question as MatchingQuestion}
+        {@const matchingSelections = getMatchingSelections(matchingQuestion)}
+        <div class="space-y-3">
+          {#each matchingQuestion.prompts as prompt}
+            <div class="grid gap-3 rounded-lg border bg-card/60 p-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.9fr)] md:items-center">
+              <div class="space-y-1">
+                <p class="text-sm font-medium text-foreground">
+                  {@html renderWithKatex(prompt.prompt)}
+                </p>
+                {#if prompt.explanation}
+                  <p class="text-xs text-muted-foreground">
+                    {@html renderWithKatex(prompt.explanation)}
+                  </p>
+                {/if}
+              </div>
+              <label class="space-y-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span>Match</span>
+                <select
+                  class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-normal text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                  value={matchingSelections[prompt.id] ?? ""}
+                  on:change={(event) =>
+                    updateMatchingSelection(
+                      matchingQuestion,
+                      prompt.id,
+                      (event.target as HTMLSelectElement).value,
+                    )}
+                >
+                  <option value="">Choose a definition</option>
+                  {#each matchingQuestion.options as option}
+                    <option
+                      value={option.id}
+                      disabled={matchingOptionTaken(
+                        matchingQuestion,
+                        prompt.id,
+                        option.id,
+                      )}
+                    >
+                      {option.label}
+                    </option>
+                  {/each}
+                </select>
+              </label>
+            </div>
+          {/each}
         </div>
       {/if}
     </div>

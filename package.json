@@ -9,7 +9,7 @@
     "dev": "rolldown-vite",
     "build:standalone": "cross-env BUILD_TARGET=inline pnpm run rolldown-vite build",
     "build:cdn": "cross-env BUILD_TARGET=cdn pnpm run rolldown-vite build",
-    "build:schema": "tsx scripts/generate-schema.ts",
+    "build:schema": "node scripts/generate-schema.ts",
     "build": "pnpm run build:standalone && pnpm run build:cdn && pnpm run build:schema",
     "preview": "pnpm run rolldown-vite preview",
     "format": "biome format . --write",
@@ -18,7 +18,7 @@
     "svelte-check": "svelte-check --tsconfig ./tsconfig.app.json",
     "check": "pnpm run lint && pnpm run typecheck && pnpm run svelte-check",
     "test": "vitest",
-    "test:examples": "tsx scripts/test-examples.ts"
+    "test:examples": "node scripts/test-examples.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.17",
