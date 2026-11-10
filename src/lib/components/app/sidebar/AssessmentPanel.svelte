@@ -1,5 +1,5 @@
 <script lang="ts">
-import { ClipboardPaste, Download, Eye, EyeOff, Upload } from "lucide-svelte";
+import { ClipboardPaste, Download, Eye, EyeOff, Upload } from "@lucide/svelte";
 import { slide } from "svelte/transition";
 import Button from "../../ui/Button.svelte";
 import {

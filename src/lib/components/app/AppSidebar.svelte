@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Upload } from "lucide-svelte";
+import { Upload } from "@lucide/svelte";
 import AssessmentPanel from "./sidebar/AssessmentPanel.svelte";
 import LibraryPanel from "./sidebar/LibraryPanel.svelte";
 import QuestionNavigator from "./sidebar/QuestionNavigator.svelte";
@@ -99,7 +99,7 @@ $: {
 function onDrop(event: DragEvent) {
   event.preventDefault();
   isDropActive = false;
-  if (!event.dataTransfer || !event.dataTransfer.files?.length) return;
+  if (!event.dataTransfer?.files?.length) return;
   const file = event.dataTransfer.files[0];
   if (file) {
     void handleFile(file);

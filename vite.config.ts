@@ -21,16 +21,19 @@ function htmlRenamePlugin(filename: string): Plugin {
   };
 }
 
+const KATEX_SHIM_ID = "\0solo-quiz-katex-shim";
+
 function katexShim(): Plugin {
   return {
     name: "solo-quiz-katex-shim",
+    enforce: "pre",
     resolveId(id) {
       if (isCdn && id === "katex") {
-        return id;
+        return KATEX_SHIM_ID;
       }
     },
     load(id) {
-      if (isCdn && id === "katex") {
+      if (id === KATEX_SHIM_ID) {
         return "export default window.katex;";
       }
     },

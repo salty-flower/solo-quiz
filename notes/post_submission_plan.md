@@ -5,23 +5,23 @@ This document restructures the nine improvement areas into discrete work items s
 ## Itemized Improvements
 
 1. **Dedicated Review Page**  
-   Create `/review/:attemptId` route with full-page layout, question navigator, and summary header. This replaces the cramped modal and becomes the foundation for the rest of the enhancements. *(Fully applicable offline.)*
+   Create `/review/:attemptId` route with full-page layout, question navigator, and summary header. This replaces the cramped modal and becomes the foundation for the rest of the enhancements. _(Fully applicable offline.)_
 2. **Enhanced LLM Grading Workspace**  
-   Build an inline grading experience (rubric sliders, feedback editor, validation) that still relies on manual paste loops for offline usage. Automated calls remain out-of-scope offline. *(Partially applicable offline.)*
+   Build an inline grading experience (rubric sliders, feedback editor, validation) that still relies on manual paste loops for offline usage. Automated calls remain out-of-scope offline. _(Partially applicable offline.)_
 3. **Results Filtering & Navigation**  
-   Add filter chips (all/incorrect/pending), sorting, search, and keyboard navigation for traversing questions inside the review page. *(Fully applicable offline.)*
+   Add filter chips (all/incorrect/pending), sorting, search, and keyboard navigation for traversing questions inside the review page. _(Fully applicable offline.)_
 4. **Visual Score Breakdown**  
-   Provide charts for deterministic vs. subjective scores and tag/type breakdowns, rendered locally via a bundled chart component. *(Fully applicable offline.)*
+   Provide charts for deterministic vs. subjective scores and tag/type breakdowns, rendered locally via a bundled chart component. _(Fully applicable offline.)_
 5. **Attempt History & Comparison**  
-   Persist attempts in IndexedDB/localStorage, list prior attempts, and enable side-by-side comparisons or "retake incorrect" flows. *(Fully applicable offline.)*
+   Persist attempts in IndexedDB/localStorage, list prior attempts, and enable side-by-side comparisons or "retake incorrect" flows. _(Fully applicable offline.)_
 6. **Study Mode Features**  
-   Allow review without answers, marking questions for later, and storing personal notes/annotations. *(Fully applicable offline.)*
+   Allow review without answers, marking questions for later, and storing personal notes/annotations. _(Fully applicable offline.)_
 7. **Improved Feedback Display**  
-   Expand feedback panes with diff view, highlighting, and expandable explanations to contrast user vs. expected answers. *(Fully applicable offline.)*
+   Expand feedback panes with diff view, highlighting, and expandable explanations to contrast user vs. expected answers. _(Fully applicable offline.)_
 8. **Analytics Dashboard**  
-   Layer on richer analytics (performance trends, tag insights, heatmaps) beyond the basic visual breakdown. *(Fully applicable offline.)*
+   Layer on richer analytics (performance trends, tag insights, heatmaps) beyond the basic visual breakdown. _(Fully applicable offline.)_
 9. **Export & Sharing Enhancements**  
-   Improve PDF/print exports and structured data downloads; omit URL sharing due to offline constraints. *(Fully applicable offline when limited to local exports.)*
+   Improve PDF/print exports and structured data downloads; omit URL sharing due to offline constraints. _(Fully applicable offline when limited to local exports.)_
 
 ## Dependency DAG (text form)
 

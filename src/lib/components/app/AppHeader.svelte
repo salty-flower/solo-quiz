@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Moon, PanelLeft, PanelRight, Sun } from "lucide-svelte";
+import { Moon, PanelLeft, PanelRight, Sun } from "@lucide/svelte";
 import type { Assessment } from "../../schema";
 import type { Theme } from "../../stores/preferences";
 import Button from "../ui/Button.svelte";

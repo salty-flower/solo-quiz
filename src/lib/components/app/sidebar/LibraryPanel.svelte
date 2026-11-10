@@ -7,7 +7,7 @@ import {
   RefreshCw,
   Trash2,
   Upload,
-} from "lucide-svelte";
+} from "@lucide/svelte";
 import { slide } from "svelte/transition";
 import Button from "../../ui/Button.svelte";
 import {

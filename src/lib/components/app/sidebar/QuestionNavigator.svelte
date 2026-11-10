@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Eye, EyeOff } from "lucide-svelte";
+import { Eye, EyeOff } from "@lucide/svelte";
 import { slide } from "svelte/transition";
 import Button from "../../ui/Button.svelte";
 import {
